@@ -1,0 +1,89 @@
+import React from 'react';
+import { View, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Card, KV, Badge, s } from './ui';
+import { ProductImage } from './shop';
+import { money, qtyLabel, niceDate, STATUS_LABELS, paymentLabel } from '../services/format';
+import { colors } from '../theme';
+
+export function StatusBadge({ status }) {
+  return <Badge status={status} label={STATUS_LABELS[status] || status} />;
+}
+
+// Progress steps for the customer; cancelled shows a single red step
+export function OrderProgress({ order }) {
+  if (order.status === 'cancelled') {
+    return (
+      <Card style={{ backgroundColor: colors.dangerSoft, borderColor: colors.dangerSoft }}>
+        <Text style={{ color: colors.danger, fontWeight: '800' }}>This order was cancelled</Text>
+        {!!order.cancel_reason && <Text style={{ color: colors.danger, marginTop: 2 }}>{order.cancel_reason}</Text>}
+      </Card>
+    );
+  }
+  const steps = ['pending', 'confirmed', order.fulfilment === 'pickup' ? 'ready' : 'out_for_delivery', 'delivered'];
+  const labels = {
+    pending: 'Order placed', confirmed: 'Confirmed', out_for_delivery: 'On the way', ready: 'Ready for pickup',
+    delivered: order.fulfilment === 'pickup' ? 'Picked up' : 'Delivered',
+  };
+  // Skipping "on the way" (straight to delivered) still marks it done
+  const reached = (st) => {
+    const order_ = ['pending', 'confirmed', 'out_for_delivery', 'ready', 'delivered'];
+    if (st === 'out_for_delivery' || st === 'ready') return order.status === st || order.status === 'delivered';
+    return order_.indexOf(order.status) >= order_.indexOf(st);
+  };
+  const when = (st) => (order.events || []).filter((e) => e.status === st).slice(-1)[0]?.at;
+  return (
+    <Card>
+      {steps.map((st, i) => {
+        const done = reached(st);
+        return (
+          <View key={st} style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ alignItems: 'center' }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: done ? colors.success : colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                {done && <Ionicons name="checkmark" size={16} color="#fff" />}
+              </View>
+              {i < steps.length - 1 && <View style={{ width: 2, flex: 1, minHeight: 18, backgroundColor: reached(steps[i + 1]) ? colors.success : colors.border }} />}
+            </View>
+            <View style={{ flex: 1, paddingBottom: 14 }}>
+              <Text style={{ fontWeight: '700', color: done ? colors.text : colors.faint }}>{labels[st]}</Text>
+              {done && when(st) && <Text style={s.itemMeta}>{niceDate(when(st))}</Text>}
+            </View>
+          </View>
+        );
+      })}
+    </Card>
+  );
+}
+
+export function OrderItems({ order, showCost }) {
+  return (
+    <Card style={{ paddingVertical: 6 }}>
+      {order.items.map((it, i) => (
+        <View key={it.id} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: colors.border }}>
+          <ProductImage uri={it.image} style={{ width: 44, height: 44, borderRadius: 8 }} iconSize={18} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '700', color: colors.text }}>{it.name}</Text>
+            <Text style={s.itemMeta}>
+              {qtyLabel(it.qty, it.unit)} × {money(it.price)}{showCost && it.cost ? ` · cost ${money(it.cost)}` : ''}
+            </Text>
+            {it.returned_qty > 0 && <Text style={[s.itemMeta, { color: colors.warning }]}>Returned {qtyLabel(it.returned_qty, it.unit)}</Text>}
+          </View>
+          <Text style={{ fontWeight: '700', color: colors.text }}>{money(it.line_total)}</Text>
+        </View>
+      ))}
+    </Card>
+  );
+}
+
+export function OrderTotals({ order, showProfit }) {
+  return (
+    <Card>
+      <KV label="Items" value={money(order.subtotal)} />
+      <KV label={order.fulfilment === 'pickup' ? 'Pickup' : 'Delivery'} value={order.delivery_fee ? money(order.delivery_fee) : 'Free'} />
+      <KV label="Total" value={money(order.total)} bold />
+      {order.refunded > 0 && <KV label="Refunded (returns)" value={`-${money(order.refunded)}`} tone="bad" />}
+      {showProfit && order.profit != null && <KV label="Profit on items" value={money(order.profit)} tone={order.profit >= 0 ? 'good' : 'bad'} />}
+      <Text style={s.itemMeta}>Payment: {paymentLabel(order)}</Text>
+    </Card>
+  );
+}

@@ -1,0 +1,51 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { Screen, SearchBar, ChipRow, Chip, Loading, ErrorBox, Empty, LoadMore, Fab, Badge, s } from '../components/ui';
+import { ProductImage } from '../components/shop';
+import { usePaged, useLoad } from '../components/useData';
+import { api } from '../services/api';
+import { money, perUnit, qtyLabel } from '../services/format';
+import { colors } from '../theme';
+
+export default function ItemsScreen({ navigation }) {
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState(0);
+  useEffect(() => { const t = setTimeout(() => setQ(search.trim()), 350); return () => clearTimeout(t); }, [search]);
+  const cats = useLoad(() => api.adminCategories().then((r) => r.categories));
+  const p = usePaged((page) => api.adminItems({ page, search: q, category_id: cat }), 'items', [q, cat]);
+
+  return (
+    <Screen title="Items" subtitle="Products in your shop" scroll onRefresh={p.refresh} refreshing={p.refreshing}>
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search items" />
+      <ChipRow>
+        <Chip label="All" active={!cat} onPress={() => setCat(0)} />
+        {(cats.data || []).map((c) => <Chip key={c.id} label={c.name} active={cat === c.id} onPress={() => setCat(c.id)} />)}
+      </ChipRow>
+      {p.loading ? <Loading /> : p.error ? <ErrorBox message={p.error} onRetry={p.reload} /> : !p.items.length ? (
+        <Empty icon="pricetags-outline" text="No items yet. Tap + to add your first product." />
+      ) : p.items.map((it) => (
+        <TouchableOpacity key={it.id} style={[s.item, { gap: 10 }]} onPress={() => navigation.navigate('ItemForm', { item: it })} testID={`item-${it.id}`}>
+          <ProductImage uri={it.image} style={{ width: 52, height: 52, borderRadius: 10 }} iconSize={20} />
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              <Text style={s.itemTitle} numberOfLines={1}>{it.name}</Text>
+              {it.status === 'inactive' && <Badge status="inactive" label="Hidden" />}
+              {it.featured && <Badge status="confirmed" label="Featured" />}
+            </View>
+            <Text style={s.itemSub} numberOfLines={1}>
+              {it.sizes?.length ? it.sizes.map((z) => `${z.name} ${money(z.price)}`).join(' · ') : perUnit(it.price, it.unit)}
+              {it.category_name ? ` · ${it.category_name}` : ''}
+            </Text>
+            <Text style={[s.itemMeta, it.track_stock && it.stock <= it.low_stock && { color: colors.danger }]}>
+              {it.track_stock ? `Stock ${qtyLabel(it.stock || 0, it.unit)}` : 'Stock not tracked'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+      <LoadMore hasMore={p.hasMore} loading={p.loadingMore} onPress={p.loadMore} />
+      <View style={{ height: 70 }} />
+      <Fab onPress={() => navigation.navigate('ItemForm', {})} label="Item" />
+    </Screen>
+  );
+}
