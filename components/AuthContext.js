@@ -135,20 +135,28 @@ export function AuthProvider({ children }) {
     await clearLocal();
   }, [clearLocal]);
 
+  // Customer deletes their account: the server marks it deleted and ends every session
+  const deleteAccount = useCallback(async () => {
+    await api.deleteAccount(); // throws on failure, so the caller can show the error
+    await AsyncStorage.removeItem(PUSH_KEY);
+    pushToken.current = null;
+    await clearLocal();
+  }, [clearLocal]);
+
   const value = useMemo(() => {
     const user = session?.user || null;
     const isStaff = user?.kind === 'staff';
     return {
       shop, shopError, reloadShop: loadShop, setShop: applyShop,
       session, user, ready,
-      login, logout, startSession, updateUser, refreshUser,
+      login, logout, deleteAccount, startSession, updateUser, refreshUser,
       isCustomer: user?.kind === 'customer',
       isStaff,
       isOwner: isStaff && user.role === 'owner',
       isBranchAdmin: isStaff && user.role === 'branch',
       branches, reloadBranches: loadBranches,
     };
-  }, [shop, shopError, loadShop, applyShop, session, ready, login, logout, startSession, updateUser, refreshUser, branches, loadBranches]);
+  }, [shop, shopError, loadShop, applyShop, session, ready, login, logout, deleteAccount, startSession, updateUser, refreshUser, branches, loadBranches]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -34,6 +34,7 @@ import AdminOrdersScreen from './screens/AdminOrdersScreen';
 import AdminOrderDetailScreen from './screens/AdminOrderDetailScreen';
 import ReturnFormScreen from './screens/ReturnFormScreen';
 import ReturnsScreen from './screens/ReturnsScreen';
+import ReviewsScreen from './screens/ReviewsScreen';
 import ItemsScreen from './screens/ItemsScreen';
 import ItemFormScreen from './screens/ItemFormScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
@@ -104,7 +105,7 @@ const ROUTES = {
   },
   staff: {
     AdminHome: AdminHomeScreen, AdminOrders: AdminOrdersScreen, AdminOrderDetail: AdminOrderDetailScreen,
-    ReturnForm: ReturnFormScreen, Returns: ReturnsScreen, Items: ItemsScreen, ItemForm: ItemFormScreen,
+    ReturnForm: ReturnFormScreen, Returns: ReturnsScreen, Reviews: ReviewsScreen, Items: ItemsScreen, ItemForm: ItemFormScreen,
     Categories: CategoriesScreen, Stock: StockScreen, StockMoves: StockMovesScreen, Customers: CustomersScreen,
     Expenses: ExpensesScreen, ExpenseForm: ExpenseFormScreen, Reports: ReportsScreen,
   },

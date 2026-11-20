@@ -1,14 +1,16 @@
 import React from 'react';
 import { View, Text, Linking } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Screen, Card, KV, Button, ListItem, SectionTitle } from '../components/ui';
 import { useAuth } from '../components/AuthContext';
 import { confirmAction } from '../services/confirm';
 import { ROLE_LABELS } from '../services/format';
 import { colors } from '../theme';
+import { PRIVACY_URL } from '../config';
 
 // Guests: log in / register. Customers: profile, orders. Staff: their account + admin.
 export default function AccountScreen({ navigation }) {
-  const { user, shop, isStaff, logout } = useAuth();
+  const { user, shop, isStaff, logout, deleteAccount } = useAuth();
 
   const signOut = async () => {
     if (await confirmAction('Log out?', '', 'Log out', true)) {
@@ -19,6 +21,24 @@ export default function AccountScreen({ navigation }) {
   };
   const call = () => Linking.openURL(`tel:${shop.phone}`);
   const whatsapp = () => Linking.openURL(`https://wa.me/${(shop.whatsapp || shop.phone).replace(/\D/g, '').replace(/^0/, '92')}`);
+  const openPrivacy = () => Linking.openURL(PRIVACY_URL);
+  // Play Store requirement: customers can delete their account in the app.
+  // The server marks it deleted and signs it out everywhere; it can't log in again.
+  const [deleting, setDeleting] = React.useState(false);
+  const requestDeletion = async () => {
+    if (!(await confirmAction('Delete your account?',
+      'Your account will be deleted and you will be logged out. You will not be able to log in with it again.',
+      'Delete account', true))) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      Toast.show({ type: 'success', text1: 'Your account has been deleted' });
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Could not delete your account', text2: e.message, visibilityTime: 6000 });
+      setDeleting(false);
+    }
+  };
 
   return (
     <Screen title="My account">
@@ -63,6 +83,12 @@ export default function AccountScreen({ navigation }) {
           </View>
           {!!shop.address && <Text style={{ color: colors.muted, marginTop: 8, textAlign: 'center' }}>{shop.address}</Text>}
         </>
+      )}
+
+      <SectionTitle>About</SectionTitle>
+      {!!PRIVACY_URL && <ListItem icon="shield-checkmark-outline" title="Privacy policy" onPress={openPrivacy} />}
+      {user && !isStaff && (
+        <ListItem icon="trash-outline" title="Delete my account" subtitle="Remove your account and personal data" onPress={deleting ? undefined : requestDeletion} />
       )}
 
       {user && <Button title="Log out" variant="danger" icon="log-out-outline" onPress={signOut} style={{ marginTop: 24 }} />}

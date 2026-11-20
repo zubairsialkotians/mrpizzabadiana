@@ -15,6 +15,7 @@ const TILES = [
   { key: 'Stock', icon: 'cube-outline', label: 'Stock' },
   { key: 'Customers', icon: 'people-outline', label: 'Customers' },
   { key: 'Returns', icon: 'return-down-back-outline', label: 'Returns' },
+  { key: 'Reviews', icon: 'star-outline', label: 'Reviews' },
   { key: 'Expenses', icon: 'trending-down-outline', label: 'Expenses' },
   { key: 'Reports', icon: 'bar-chart-outline', label: 'Reports' },
   { key: 'AdminNews', icon: 'megaphone-outline', label: 'News', owner: true },

@@ -13,7 +13,7 @@ if (fs.existsSync(envFile)) {
 
 const name     = process.env.APP_NAME      || 'Mr Pizza Badiana';
 const slug     = process.env.APP_SLUG      || 'mrpizzabadiana';
-const bundleId = process.env.APP_BUNDLE_ID || 'com.sialkotians.mrpizzabadiana';
+const bundleId = process.env.APP_BUNDLE_ID || 'mr.pizza.badiana';
 const primary  = process.env.EXPO_PUBLIC_PRIMARY_COLOR || '#e9dd12';
 
 const projectId          = process.env.EAS_PROJECT_ID || undefined;
@@ -41,6 +41,10 @@ module.exports = {
       // Embedded icon font so icons never depend on runtime font loading
       ['expo-font', { fonts: ['./assets/fonts/ionicons.ttf'] }],
       './plugins/withNoForceDark',
+      // Portrait lock must not hide the app from devices without a portrait screen
+      './plugins/withOptionalPortrait',
+      // Google Play requires target API level 36 (Android 16)
+      ['expo-build-properties', { android: { compileSdkVersion: 36, targetSdkVersion: 36, buildToolsVersion: '36.0.0' } }],
     ],
     ios: {
       supportsTablet: true,
@@ -54,6 +58,8 @@ module.exports = {
         backgroundColor: '#ffffff',
       },
       edgeToEdgeEnabled: true,
+      // No ads or ad tracking: keep libraries from adding the advertising ID permission
+      blockedPermissions: ['com.google.android.gms.permission.AD_ID'],
       ...(fs.existsSync(googleServicesFile) ? { googleServicesFile } : {}),
     },
     web: { favicon: './assets/favicon.png' },

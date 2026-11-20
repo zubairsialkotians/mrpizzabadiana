@@ -4,6 +4,7 @@ import Toast from 'react-native-toast-message';
 import { Screen, Card, Loading, ErrorBox, SectionTitle, Button, Footer, s } from '../components/ui';
 import { OrderProgress, OrderItems, OrderTotals, StatusBadge } from '../components/orders';
 import { PaymentCard } from '../components/payments';
+import { ReviewForm } from '../components/reviews';
 import { pickImage } from '../services/images';
 import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
@@ -64,6 +65,12 @@ export default function MyOrderDetailScreen({ navigation, route }) {
       footer={o.can_cancel && !key ? <Footer><Button title="Cancel order" variant="outline" onPress={cancel} loading={busy} /></Footer> : null}
     >
       <OrderProgress order={o} />
+      {o.can_review && (
+        <>
+          <SectionTitle>{o.review ? 'Your review' : 'Rate your order'}</SectionTitle>
+          <ReviewForm key={o.review?.updated_at || 'new'} order={o} accessKey={key} onSaved={setData} />
+        </>
+      )}
       <SectionTitle>Payment</SectionTitle>
       <PaymentCard order={o} onSend={sendProof} sending={sending} />
       <SectionTitle>{o.fulfilment === 'pickup' ? 'Pickup' : 'Delivery'}</SectionTitle>

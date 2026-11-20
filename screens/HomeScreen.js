@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Image, FlatList, TouchableOpacity, RefreshControl, useWindowDimensions, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { SearchBar, Loading, ErrorBox, Empty } from '../components/ui';
@@ -18,6 +18,7 @@ import { colors } from '../theme';
 export default function HomeScreen({ navigation }) {
   const { shop, user, isStaff, reloadShop } = useAuth();
   const cart = useCart();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [category, setCategory] = useState(0);
   const [search, setSearch] = useState('');
@@ -89,8 +90,8 @@ export default function HomeScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-      <View style={st.top}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right']}>
+      <View style={[st.top, { paddingTop: 10 + insets.top }]}>
         {shop?.logo_url ? <Image source={{ uri: shop.logo_url }} style={st.logo} resizeMode="contain" /> : null}
         <View style={{ flex: 1 }}>
           <Text style={st.shopName} numberOfLines={1}>{shop?.name}</Text>
@@ -109,7 +110,7 @@ export default function HomeScreen({ navigation }) {
         numColumns={cols}
         keyExtractor={(x) => String(x.id)}
         columnWrapperStyle={{ gap }}
-        contentContainerStyle={{ padding: pad, paddingBottom: cart.count ? 90 : 30, maxWidth: 1000, width: '100%', alignSelf: 'center' }}
+        contentContainerStyle={{ padding: pad, paddingBottom: (cart.count ? 90 : 30) + insets.bottom, maxWidth: 1000, width: '100%', alignSelf: 'center' }}
         ListHeaderComponent={header}
         ListEmptyComponent={p.loading ? <Loading /> : p.error ? <ErrorBox message={p.error} onRetry={p.reload} /> : <Empty icon="basket-outline" text={q ? 'No products match your search' : 'No products yet'} />}
         renderItem={({ item }) => <ProductCard p={item} width={cardW} onPress={() => navigation.navigate('Product', { id: item.id, product: item })} />}
@@ -120,10 +121,13 @@ export default function HomeScreen({ navigation }) {
       />
 
       {cart.count > 0 && (
-        <TouchableOpacity style={st.cartBar} onPress={() => navigation.navigate('Cart')} testID="cart-bar">
-          <View style={st.cartCount}><Text style={{ color: colors.primary, fontWeight: '800' }}>{cart.count}</Text></View>
+        <TouchableOpacity style={[st.cartBar, { bottom: 18 + insets.bottom }]} onPress={() => navigation.navigate('Cart')} testID="cart-bar">
+          <View style={st.cartCount}><Text style={{ color: colors.onBrand, fontWeight: '800' }}>{cart.count}</Text></View>
           <Text style={st.cartBarText}>View cart</Text>
-          <Text style={st.cartBarText}>{money(cart.subtotal)}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[st.cartBarText, { color: colors.brand }]}>{money(cart.subtotal)}</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.brand} />
+          </View>
         </TouchableOpacity>
       )}
     </SafeAreaView>
@@ -132,23 +136,24 @@ export default function HomeScreen({ navigation }) {
 
 const st = StyleSheet.create({
   top: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingBottom: 16,
+    backgroundColor: colors.brand, borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4, zIndex: 1,
   },
-  logo: { width: 40, height: 40, borderRadius: 8 },
-  shopName: { fontSize: 19, fontWeight: '800', color: colors.primaryDark },
-  hello: { fontSize: 12, color: colors.muted },
-  banner: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: 12, padding: 10, marginBottom: 10 },
+  logo: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#fff' },
+  shopName: { fontSize: 20, fontWeight: '900', color: colors.onBrand },
+  hello: { fontSize: 12, color: colors.onBrand, opacity: 0.75, fontWeight: '600' },
+  banner: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: 16, padding: 10, marginBottom: 10 },
   bannerText: { flex: 1, color: colors.primaryDark, fontWeight: '600', fontSize: 13 },
   cat: { width: 72, alignItems: 'center' },
-  catImgWrap: { borderRadius: 34, borderWidth: 2, borderColor: 'transparent', padding: 2 },
-  catImg: { width: 58, height: 58, borderRadius: 29 },
+  catImgWrap: { borderRadius: 20, borderWidth: 2, borderColor: 'transparent', padding: 2 },
+  catImg: { width: 60, height: 60, borderRadius: 16 },
   catText: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 4 },
   cartBar: {
-    position: 'absolute', left: 14, right: 14, bottom: 18, height: 56, borderRadius: 16, backgroundColor: colors.brand,
+    position: 'absolute', left: 14, right: 14, bottom: 18, height: 58, borderRadius: 29, backgroundColor: colors.black,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14,
     shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
-  cartCount: { backgroundColor: '#fff', borderRadius: 12, minWidth: 28, height: 28, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  cartBarText: { color: colors.onBrand, fontWeight: '800', fontSize: 16 },
+  cartCount: { backgroundColor: colors.brand, borderRadius: 14, minWidth: 28, height: 28, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  cartBarText: { color: '#fff', fontWeight: '800', fontSize: 16 },
 });

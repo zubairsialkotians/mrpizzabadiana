@@ -19,7 +19,8 @@ export default function CustomersScreen({ navigation }) {
         <ListItem
           key={c.id}
           title={c.name || c.email}
-          badge={c.source === 'checkout' ? <Badge status="inactive" label="Guest checkout" /> : null}
+          badge={c.status === 'deleted' ? <Badge status="cancelled" label="Deleted" />
+            : c.source === 'checkout' ? <Badge status="inactive" label="Guest checkout" /> : null}
           subtitle={`${c.phone} · ${c.email}`}
           meta={`${c.orders} order${c.orders === 1 ? '' : 's'}${c.last_order ? ` · last ${niceDate(c.last_order, false)}` : ''}`}
           right={money(c.spent)}

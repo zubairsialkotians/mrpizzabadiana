@@ -4,6 +4,7 @@ import Toast from 'react-native-toast-message';
 import { Screen, Card, KV, Loading, ErrorBox, SectionTitle, Button, Footer, Field, SelectField, s } from '../components/ui';
 import { OrderItems, OrderTotals, StatusBadge } from '../components/orders';
 import { PaymentCard } from '../components/payments';
+import { ReviewView } from '../components/reviews';
 import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
@@ -106,6 +107,13 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
       <PaymentCard order={o} staff busy={busy}
         onVerify={() => run('verified', () => api.setPaymentStatus(o.id, 'verified'))}
         onReject={(why) => run('rejected', () => api.setPaymentStatus(o.id, 'rejected', why))} />
+
+      {!!o.review && (
+        <>
+          <SectionTitle right={<Text style={s.itemMeta} onPress={() => navigation.navigate('Reviews')}>All reviews ›</Text>}>Customer review</SectionTitle>
+          <ReviewView review={o.review} />
+        </>
+      )}
 
       <SectionTitle>Items</SectionTitle>
       <OrderItems order={o} showCost={o.status !== 'pending' && o.status !== 'cancelled'} />
