@@ -31,13 +31,13 @@ module.exports = {
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
-      backgroundColor: '#ffffff',
+      backgroundColor: '#1c1714',
     },
     plugins: [
       ['expo-notifications', { color: primary }],
       'expo-system-ui',
       // Product photos and shop logo (staff)
-      ['expo-image-picker', { photosPermission: 'Choose photos for your products and shop logo.', cameraPermission: 'Take photos of your products.', microphonePermission: false }],
+      ['expo-image-picker', { photosPermission: 'Choose a payment screenshot, or photos for your products and shop logo.', cameraPermission: 'Take photos of your products.', microphonePermission: false }],
       // Embedded icon font so icons never depend on runtime font loading
       ['expo-font', { fonts: ['./assets/fonts/ionicons.ttf'] }],
       './plugins/withNoForceDark',
@@ -55,11 +55,21 @@ module.exports = {
       package: bundleId,
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#ffffff',
+        backgroundColor: '#1c1714',
       },
       edgeToEdgeEnabled: true,
-      // No ads or ad tracking: keep libraries from adding the advertising ID permission
-      blockedPermissions: ['com.google.android.gms.permission.AD_ID'],
+      // No ads or ad tracking: keep libraries from adding the advertising ID permission.
+      // Gallery picks go through the system photo picker, so broad media/storage access isn't needed
+      // (avoids Play's Photo & Video permissions declaration). No microphone use.
+      blockedPermissions: [
+        'com.google.android.gms.permission.AD_ID',
+        'android.permission.READ_MEDIA_IMAGES',
+        'android.permission.READ_MEDIA_VIDEO',
+        'android.permission.READ_MEDIA_AUDIO',
+        'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+        'android.permission.RECORD_AUDIO',
+        'android.permission.SYSTEM_ALERT_WINDOW',
+      ],
       ...(fs.existsSync(googleServicesFile) ? { googleServicesFile } : {}),
     },
     web: { favicon: './assets/favicon.png' },

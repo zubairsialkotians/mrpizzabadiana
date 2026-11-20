@@ -6,7 +6,6 @@ import { useAuth } from '../components/AuthContext';
 import { confirmAction } from '../services/confirm';
 import { ROLE_LABELS } from '../services/format';
 import { colors } from '../theme';
-import { PRIVACY_URL } from '../config';
 
 // Guests: log in / register. Customers: profile, orders. Staff: their account + admin.
 export default function AccountScreen({ navigation }) {
@@ -21,7 +20,6 @@ export default function AccountScreen({ navigation }) {
   };
   const call = () => Linking.openURL(`tel:${shop.phone}`);
   const whatsapp = () => Linking.openURL(`https://wa.me/${(shop.whatsapp || shop.phone).replace(/\D/g, '').replace(/^0/, '92')}`);
-  const openPrivacy = () => Linking.openURL(PRIVACY_URL);
   // Play Store requirement: customers can delete their account in the app.
   // The server marks it deleted and signs it out everywhere; it can't log in again.
   const [deleting, setDeleting] = React.useState(false);
@@ -86,7 +84,7 @@ export default function AccountScreen({ navigation }) {
       )}
 
       <SectionTitle>About</SectionTitle>
-      {!!PRIVACY_URL && <ListItem icon="shield-checkmark-outline" title="Privacy policy" onPress={openPrivacy} />}
+      <ListItem icon="shield-checkmark-outline" title="Privacy policy" subtitle="What we collect and how we use it" onPress={() => navigation.navigate('PrivacyPolicy')} />
       {user && !isStaff && (
         <ListItem icon="trash-outline" title="Delete my account" subtitle="Remove your account and personal data" onPress={deleting ? undefined : requestDeletion} />
       )}
