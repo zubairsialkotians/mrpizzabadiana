@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { Screen, SearchBar, ChipRow, Chip, Loading, ErrorBox, Empty, LoadMore, Fab, Badge, s } from '../components/ui';
+import { Screen, SearchBar, ChipRow, Chip, Loading, ErrorBox, Empty, LoadMore, Fab, Badge, Button, s } from '../components/ui';
 import { ProductImage } from '../components/shop';
 import { usePaged, useLoad } from '../components/useData';
 import { api } from '../services/api';
@@ -17,6 +17,11 @@ export default function ItemsScreen({ navigation }) {
 
   return (
     <Screen title="Items" subtitle="Products in your shop" scroll onRefresh={p.refresh} refreshing={p.refreshing}>
+      {/* Stock bought: add a purchase (stock, cost and sale price follow) or see past ones */}
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+        <Button testID="items-add-purchase" small icon="cart-outline" title="Add purchase" onPress={() => navigation.navigate('PurchaseForm', {})} style={{ flex: 1 }} />
+        <Button testID="items-purchases" small variant="outline" icon="list-outline" title="Purchases" onPress={() => navigation.navigate('Purchases')} style={{ flex: 1 }} />
+      </View>
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search items" />
       <ChipRow>
         <Chip label="All" active={!cat} onPress={() => setCat(0)} />

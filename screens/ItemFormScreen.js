@@ -37,9 +37,11 @@ const QUICK_SIZES = ['S', 'M', 'L', 'XL', 'XXL'];
 export default function ItemFormScreen({ navigation, route }) {
   const { isOwner } = useAuth();
   const it = route.params?.item;
+  // Opened from New purchase: the purchase adds the stock, and we go back to it with the new item chosen
+  const forPurchase = !!route.params?.forPurchase;
   const cats = useLoad(() => api.adminCategories().then((r) => r.categories));
   const [f, setF] = useState({
-    name: it?.name || '', description: it?.description || '', sku: it?.sku || '', category_id: it?.category_id || 0,
+    name: it?.name || '', description: it?.description || '', sku: it?.sku || '', category_id: it?.category_id || route.params?.category_id || 0,
     unit: it?.unit || 'pcs', price: num(it?.price), compare_price: it?.compare_price ? num(it.compare_price) : '',
     cost_price: it?.cost_price ? num(it.cost_price) : '', min_qty: num(it?.min_qty ?? 1), qty_step: num(it?.qty_step ?? 1),
     low_stock: it?.low_stock ? num(it.low_stock) : '', opening_stock: '', track_stock: it ? it.track_stock : true,
@@ -94,7 +96,8 @@ export default function ItemFormScreen({ navigation, route }) {
         sizes: sized ? sizes.map((z) => ({ name: z.name.trim(), price: z.price, cost: z.cost || 0 })) : [],
       });
       Toast.show({ type: 'success', text1: r.message });
-      navigation.goBack();
+      if (forPurchase) navigation.popTo('PurchaseForm', { newItemId: r.id, newItemCategory: f.category_id || 0 }, { merge: true });
+      else navigation.goBack();
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Could not save', text2: e.message, visibilityTime: 6000 });
     } finally {
@@ -206,7 +209,7 @@ export default function ItemFormScreen({ navigation, route }) {
           <>
             {sized && <Text style={[s.itemMeta, { marginBottom: 8 }]}>Stock counts pieces of any size together. Most shops turn this off for fast food.</Text>}
             <Field label={`Low stock alert at (${unit})`} value={f.low_stock} onChangeText={set('low_stock')} keyboardType="decimal-pad" />
-            {!it && (
+            {!it && !forPurchase && (
               <>
                 <BranchField value={branchId} onChange={setBranchId} label="Opening stock goes to" />
                 <Field label={`Opening stock (${unit})`} value={f.opening_stock} onChangeText={set('opening_stock')} keyboardType="decimal-pad"

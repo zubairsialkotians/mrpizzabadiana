@@ -45,6 +45,8 @@ import CustomersScreen from './screens/CustomersScreen';
 import ExpensesScreen from './screens/ExpensesScreen';
 import ExpenseFormScreen from './screens/ExpenseFormScreen';
 import ReportsScreen from './screens/ReportsScreen';
+import PurchasesScreen from './screens/PurchasesScreen';
+import PurchaseFormScreen from './screens/PurchaseFormScreen';
 import BillScreen from './screens/BillScreen';
 import BranchesScreen from './screens/BranchesScreen';
 import BranchFormScreen from './screens/BranchFormScreen';
@@ -117,6 +119,7 @@ const ROUTES = {
     ReturnForm: ReturnFormScreen, Returns: ReturnsScreen, Reviews: ReviewsScreen, Items: ItemsScreen, ItemForm: ItemFormScreen,
     Categories: CategoriesScreen, Stock: StockScreen, StockMoves: StockMovesScreen, Customers: CustomersScreen,
     Expenses: ExpensesScreen, ExpenseForm: ExpenseFormScreen, Reports: ReportsScreen,
+    Purchases: PurchasesScreen, PurchaseForm: PurchaseFormScreen,
   },
   // Taking orders in the app: owner, branch admin, cashier (the cashier's home is their orders list)
   seller: { AdminOrders: AdminOrdersScreen, AdminOrderDetail: AdminOrderDetailScreen, PosOrder: PosOrderScreen },

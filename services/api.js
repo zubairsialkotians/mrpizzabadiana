@@ -132,6 +132,10 @@ export const api = {
   expenses: (p) => get('/admin/expenses', p),
   saveExpense: (d) => post('/admin/expenses/save', d),
   deleteExpense: (id) => post('/admin/expenses/delete', { id }),
+  // Purchases (stock bought): saving adds the stock and can change cost / sale price, so the saved menu is refreshed
+  purchases: (p) => get('/admin/purchases', p),
+  savePurchase: changesMenu((d) => post('/admin/purchases/save', d)),
+  deletePurchase: changesMenu((id) => post('/admin/purchases/delete', { id })),
   expenseCategories: () => get('/admin/expenses/categories'),
 
   sellers: () => get('/admin/sellers'),

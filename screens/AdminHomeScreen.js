@@ -14,6 +14,7 @@ const TILES = [
   { key: 'Items', icon: 'pricetags-outline', label: 'Items' },
   { key: 'Categories', icon: 'grid-outline', label: 'Categories' },
   { key: 'Stock', icon: 'cube-outline', label: 'Stock' },
+  { key: 'Purchases', icon: 'cart-outline', label: 'Purchases' },
   { key: 'Customers', icon: 'people-outline', label: 'Customers' },
   { key: 'Returns', icon: 'return-down-back-outline', label: 'Returns' },
   { key: 'Reviews', icon: 'star-outline', label: 'Reviews' },
