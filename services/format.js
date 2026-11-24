@@ -73,7 +73,7 @@ export function rangeLabel(r) {
   return 'Custom';
 }
 
-export const ROLE_LABELS = { owner: 'Owner', branch: 'Branch admin', customer: 'Customer' };
+export const ROLE_LABELS = { owner: 'Owner', branch: 'Branch admin', kitchen: 'Kitchen', rider: 'Rider', cashier: 'Cashier', customer: 'Customer' };
 
 // Weight/volume in friendly units: 0.25 kg → "250 g", 1.5 kg → "1.5 kg", 0.5 litre → "500 ml"
 export function qtyLabel(q, unit) {
@@ -92,8 +92,8 @@ export function perUnit(price, unit) {
 }
 
 export const STATUS_LABELS = {
-  pending: 'Pending', confirmed: 'Confirmed', out_for_delivery: 'Out for delivery', ready: 'Ready for pickup',
-  delivered: 'Delivered', cancelled: 'Cancelled',
+  pending: 'Pending', confirmed: 'Confirmed', ready_for_delivery: 'Ready for delivery', out_for_delivery: 'On the way', ready: 'Ready for pickup',
+  delivered: 'Delivered', completed: 'Completed', cancelled: 'Cancelled',
 };
 
 // How an order is paid, in one line (lists, totals, bills)

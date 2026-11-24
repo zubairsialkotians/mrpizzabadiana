@@ -9,6 +9,7 @@ import { money, rangeFor, rangeLabel, ROLE_LABELS } from '../services/format';
 import { colors } from '../theme';
 
 const TILES = [
+  { key: 'NewOrder', screen: 'Home', icon: 'add-circle-outline', label: 'New order' },
   { key: 'AdminOrders', icon: 'receipt-outline', label: 'Orders' },
   { key: 'Items', icon: 'pricetags-outline', label: 'Items' },
   { key: 'Categories', icon: 'grid-outline', label: 'Categories' },
@@ -18,6 +19,8 @@ const TILES = [
   { key: 'Reviews', icon: 'star-outline', label: 'Reviews' },
   { key: 'Expenses', icon: 'trending-down-outline', label: 'Expenses' },
   { key: 'Reports', icon: 'bar-chart-outline', label: 'Reports' },
+  { key: 'TeamHome', icon: 'restaurant-outline', label: 'Kitchen board' },
+  { key: 'Team', icon: 'people-outline', label: 'Staff logins', owner: true },
   { key: 'AdminNews', icon: 'megaphone-outline', label: 'News', owner: true },
   { key: 'AdminBanners', icon: 'images-outline', label: 'Banners', owner: true },
   { key: 'Branches', icon: 'business-outline', label: 'Branches', owner: true },
@@ -63,14 +66,14 @@ export default function AdminHomeScreen({ navigation }) {
       {data?.active_all > 0 && (
         <TouchableOpacity style={[st.alert, { backgroundColor: colors.primarySoft }]} onPress={() => go('AdminOrders', { status: 'active' })}>
           <Ionicons name="bicycle" size={20} color={colors.primary} />
-          <Text style={[st.alertText, { color: colors.primary }]}>{data.active_all} order{data.active_all > 1 ? 's' : ''} to deliver / hand over</Text>
+          <Text style={[st.alertText, { color: colors.primary }]}>{data.active_all} order{data.active_all > 1 ? 's' : ''} in progress (kitchen, riders, pickup)</Text>
           <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </TouchableOpacity>
       )}
 
       <View style={st.tiles}>
         {tiles.map((t) => (
-          <TouchableOpacity key={t.key} style={st.tile} onPress={() => go(t.key)} testID={`tile-${t.key}`}>
+          <TouchableOpacity key={t.key} style={st.tile} onPress={() => go(t.screen || t.key)} testID={`tile-${t.key}`}>
             <View style={st.tileIcon}><Ionicons name={t.icon} size={22} color={colors.primary} /></View>
             <Text style={st.tileText} numberOfLines={1}>{t.label}</Text>
           </TouchableOpacity>
@@ -85,7 +88,7 @@ export default function AdminHomeScreen({ navigation }) {
           <Stat label="Sales" value={money(data.net_sales)} sub={`${data.orders} orders${data.refunds ? ` · ${money(data.refunds)} refunded` : ''}`} tone="primary" icon="trending-up" onPress={() => go('Reports')} />
           <Stat label="Net profit" value={money(data.net_profit)} sub={`Gross ${money(data.gross_profit)}`} tone={data.net_profit >= 0 ? 'good' : 'bad'} icon="analytics" onPress={() => go('Reports', { tab: 'pl' })} />
           <Stat label="New orders" value={String(data.status.pending.count)} sub={`${data.status.cancelled.count} cancelled`} icon="receipt" onPress={() => go('AdminOrders', { status: 'pending' })} />
-          <Stat label="Delivered" value={String(data.status.delivered.count)} sub={money(data.status.delivered.total)} tone="good" icon="checkmark-done" onPress={() => go('AdminOrders', { status: 'delivered' })} />
+          <Stat label="Delivered" value={String(data.status.delivered.count + (data.status.completed?.count || 0))} sub={`${money(data.status.delivered.total + (data.status.completed?.total || 0))}${data.status.completed?.count ? ` · ${data.status.completed.count} completed` : ''}`} tone="good" icon="checkmark-done" onPress={() => go('AdminOrders', { status: 'delivered' })} />
           <Stat label="Delivery charges" value={money(data.delivery)} icon="bicycle" />
           <Stat label="Expenses" value={money(data.expenses)} tone="bad" icon="trending-down" onPress={() => go('Expenses')} />
           <Stat label="Low stock items" value={String(data.low_stock)} tone={data.low_stock ? 'warn' : 'default'} icon="alert-circle" onPress={() => go('Stock', { low: true })} />

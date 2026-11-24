@@ -7,12 +7,12 @@ import { useCart, lineKey, lineName } from '../components/CartContext';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { money, perUnit } from '../services/format';
-import { deliveryFee, round2 } from '../services/qty';
+import { deliveryFee, shopCharges, round2 } from '../services/qty';
 import { colors } from '../theme';
 
 export default function CartScreen({ navigation }) {
   const cart = useCart();
-  const { shop } = useAuth();
+  const { shop, isSeller } = useAuth();
   const [checking, setChecking] = useState(false);
 
   // Bring prices and stock up to date
@@ -28,17 +28,20 @@ export default function CartScreen({ navigation }) {
   if (!cart.lines.length) {
     return (
       <Screen title="Cart">
-        <Empty icon="cart-outline" text="Your cart is empty" />
-        <Button title="Start shopping" onPress={() => navigation.navigate('Home')} />
+        <Empty icon="cart-outline" text={isSeller ? 'No items in this order yet' : 'Your cart is empty'} />
+        <Button title={isSeller ? 'Add items' : 'Start shopping'} onPress={() => navigation.navigate('Home')} />
       </Screen>
     );
   }
 
-  const fee = deliveryFee(shop, cart.subtotal);
+  // Staff taking an order: delivery is chosen at their checkout; no minimum, opening hours or (main branch) stock limit here,
+  // the server checks the branch's stock when the order is placed
+  const fee = isSeller ? 0 : deliveryFee(shop, cart.subtotal);
+  const charges = shopCharges(shop, cart.subtotal, fee);
   const free = Number(shop?.free_delivery_over) || 0;
-  const belowMin = shop?.min_order > 0 && cart.subtotal < shop.min_order;
+  const belowMin = !isSeller && shop?.min_order > 0 && cart.subtotal < shop.min_order;
   // Stock is per item: sizes of the same item count together
-  const overItem = (l) => l.max_qty != null && cart.qtyOf(l.item_id) > l.max_qty + 1e-9;
+  const overItem = (l) => !isSeller && l.max_qty != null && cart.qtyOf(l.item_id) > l.max_qty + 1e-9;
   const overStock = cart.lines.filter(overItem);
   const accounts = shop?.pay_accounts || [];
   const cashOk = shop?.cod !== false || !accounts.length;
@@ -49,9 +52,9 @@ export default function CartScreen({ navigation }) {
       subtitle={`${cart.count} item${cart.count === 1 ? '' : 's'}${checking ? ' · checking prices…' : ''}`}
       footer={(
         <Footer>
-          <Button testID="checkout" title={`Checkout · ${money(round2(cart.subtotal + fee))}`} icon="arrow-forward"
-            disabled={belowMin || overStock.length > 0 || !shop?.is_open} onPress={() => navigation.navigate('Checkout')} />
-          {!shop?.is_open && <Text style={{ color: colors.danger, textAlign: 'center', marginTop: 6 }}>The shop is closed right now.</Text>}
+          <Button testID="checkout" title={`${isSeller ? 'Customer & charges' : 'Checkout'} · ${money(isSeller ? cart.subtotal : charges.total)}`} icon="arrow-forward"
+            disabled={belowMin || overStock.length > 0 || (!isSeller && !shop?.is_open)} onPress={() => navigation.navigate(isSeller ? 'PosOrder' : 'Checkout')} />
+          {!isSeller && !shop?.is_open && <Text style={{ color: colors.danger, textAlign: 'center', marginTop: 6 }}>The shop is closed right now.</Text>}
         </Footer>
       )}
     >
@@ -78,10 +81,18 @@ export default function CartScreen({ navigation }) {
         );
       })}
 
+      {isSeller ? (
+        <Card>
+          <KV label="Items" value={money(cart.subtotal)} bold />
+          <Text style={s.itemMeta}>Next: takeaway or delivery, customer details, discount, tax and service charge.</Text>
+        </Card>
+      ) : (
       <Card>
         <KV label="Items" value={money(cart.subtotal)} />
         <KV label="Delivery" value={fee ? money(fee) : 'Free'} tone={fee ? undefined : 'good'} />
-        <KV label="Total" value={money(round2(cart.subtotal + fee))} bold />
+        {charges.tax.amount > 0 && <KV label={`Tax${charges.tax.label}`} value={`+${money(charges.tax.amount)}`} />}
+        {charges.service.amount > 0 && <KV label={`Service charge${charges.service.label}`} value={`+${money(charges.service.amount)}`} />}
+        <KV label="Total" value={money(charges.total)} bold />
         {free > 0 && fee > 0 && (
           <Text style={[s.itemMeta, { color: colors.success }]}>Add {money(round2(free - cart.subtotal))} more for free delivery</Text>
         )}
@@ -92,6 +103,7 @@ export default function CartScreen({ navigation }) {
             : `Pay cash on delivery${shop?.pickup ? ' or at pickup' : ''}.`}
         </Text>
       </Card>
+      )}
     </Screen>
   );
 }

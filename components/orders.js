@@ -20,17 +20,19 @@ export function OrderProgress({ order }) {
       </Card>
     );
   }
-  const steps = ['pending', 'confirmed', order.fulfilment === 'pickup' ? 'ready' : 'out_for_delivery', 'delivered'];
+  const pickup = order.fulfilment === 'pickup';
+  const steps = pickup
+    ? ['pending', 'confirmed', 'ready', 'delivered']
+    : ['pending', 'confirmed', 'ready_for_delivery', 'out_for_delivery', 'delivered'];
   const labels = {
-    pending: 'Order placed', confirmed: 'Confirmed', out_for_delivery: 'On the way', ready: 'Ready for pickup',
-    delivered: order.fulfilment === 'pickup' ? 'Picked up' : 'Delivered',
+    pending: 'Order placed', confirmed: 'Confirmed · being prepared', ready_for_delivery: 'Ready · waiting for the rider',
+    out_for_delivery: order.rider_name ? `On the way with ${order.rider_name}` : 'On the way', ready: 'Ready for pickup',
+    delivered: pickup ? 'Picked up' : 'Delivered',
   };
-  // Skipping "on the way" (straight to delivered) still marks it done
-  const reached = (st) => {
-    const order_ = ['pending', 'confirmed', 'out_for_delivery', 'ready', 'delivered'];
-    if (st === 'out_for_delivery' || st === 'ready') return order.status === st || order.status === 'delivered';
-    return order_.indexOf(order.status) >= order_.indexOf(st);
-  };
+  // A skipped step (e.g. straight to delivered) still shows as done
+  // (a status from the other flow, set by the shop by hand, counts as confirmed)
+  const at = order.status === 'completed' ? steps.length - 1 : steps.includes(order.status) ? steps.indexOf(order.status) : 1;
+  const reached = (st) => at >= steps.indexOf(st);
   const when = (st) => (order.events || []).filter((e) => e.status === st).slice(-1)[0]?.at;
   return (
     <Card>
@@ -80,6 +82,11 @@ export function OrderTotals({ order, showProfit }) {
     <Card>
       <KV label="Items" value={money(order.subtotal)} />
       <KV label={order.fulfilment === 'pickup' ? 'Pickup' : 'Delivery'} value={order.delivery_fee ? money(order.delivery_fee) : 'Free'} />
+      {order.discount > 0 && (
+        <KV label={`Discount${order.discount_type === 'percent' ? ` (${Number(order.discount_value)}%)` : ''}`} value={`-${money(order.discount)}`} tone="bad" />
+      )}
+      {order.tax > 0 && <KV label={`Tax${order.tax_type === 'percent' ? ` (${Number(order.tax_value)}%)` : ''}`} value={`+${money(order.tax)}`} />}
+      {order.service > 0 && <KV label={`Service charge${order.service_type === 'percent' ? ` (${Number(order.service_value)}%)` : ''}`} value={`+${money(order.service)}`} />}
       <KV label="Total" value={money(order.total)} bold />
       {order.refunded > 0 && <KV label="Refunded (returns)" value={`-${money(order.refunded)}`} tone="bad" />}
       {showProfit && order.profit != null && <KV label="Profit on items" value={money(order.profit)} tone={order.profit >= 0 ? 'good' : 'bad'} />}

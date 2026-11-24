@@ -10,6 +10,7 @@ import Toast from 'react-native-toast-message';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { CartProvider } from './components/CartContext';
 import DismissKeyboard from './components/DismissKeyboard';
+import PrintHost from './components/PrintHost';
 import { Button } from './components/ui';
 import { APP_NAME, SHOP_KEY } from './config';
 import { colors } from './theme';
@@ -56,6 +57,12 @@ import AdminNewsScreen from './screens/AdminNewsScreen';
 import NewsFormScreen from './screens/NewsFormScreen';
 import AdminBannersScreen from './screens/AdminBannersScreen';
 import BannerFormScreen from './screens/BannerFormScreen';
+// Kitchen & riders
+import TeamHomeScreen from './screens/TeamHomeScreen';
+import TeamOrderDetailScreen from './screens/TeamOrderDetailScreen';
+import TeamScreen from './screens/TeamScreen';
+import TeamFormScreen from './screens/TeamFormScreen';
+import PosOrderScreen from './screens/PosOrderScreen';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
@@ -66,7 +73,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Pushes carry { screen, params }: AdminOrderDetail for staff, MyOrderDetail for customers,
+// Pushes carry { screen, params }: AdminOrderDetail for staff, TeamOrderDetail for kitchen/riders, MyOrderDetail for customers,
 // NewsDetail for everyone (guests too). Waits for the navigator when the app was just launched.
 function openFromNotification(response, tries = 0) {
   const data = response?.notification?.request?.content?.data;
@@ -111,7 +118,11 @@ const ROUTES = {
     Categories: CategoriesScreen, Stock: StockScreen, StockMoves: StockMovesScreen, Customers: CustomersScreen,
     Expenses: ExpensesScreen, ExpenseForm: ExpenseFormScreen, Reports: ReportsScreen,
   },
-  owner: { Branches: BranchesScreen, BranchForm: BranchFormScreen, Settings: SettingsScreen, AdminNews: AdminNewsScreen, NewsForm: NewsFormScreen, AdminBanners: AdminBannersScreen, BannerForm: BannerFormScreen },
+  // Taking orders in the app: owner, branch admin, cashier (the cashier's home is their orders list)
+  seller: { AdminOrders: AdminOrdersScreen, AdminOrderDetail: AdminOrderDetailScreen, PosOrder: PosOrderScreen },
+  // Kitchen / rider panel (the shop admin can open the kitchen board too)
+  team: { TeamHome: TeamHomeScreen, TeamOrderDetail: TeamOrderDetailScreen },
+  owner: { Team: TeamScreen, TeamForm: TeamFormScreen, Branches: BranchesScreen, BranchForm: BranchFormScreen, Settings: SettingsScreen, AdminNews: AdminNewsScreen, NewsForm: NewsFormScreen, AdminBanners: AdminBannersScreen, BannerForm: BannerFormScreen },
 };
 
 // Shown while the shop info loads on first launch (after the native splash)
@@ -133,15 +144,15 @@ function Splash({ shop, error, onRetry }) {
 }
 
 function Routes() {
-  const { ready, shop, shopError, reloadShop, isStaff, isOwner } = useAuth();
+  const { ready, shop, shopError, reloadShop, isStaff, isTeam, isSeller, isOwner, homeRoute } = useAuth();
 
-  // Staff logged in / out: start over on the right home (the container would otherwise keep the old stack)
-  const wasStaff = useRef(isStaff);
+  // Staff / kitchen / rider logged in or out: start over on the right home (the container would otherwise keep the old stack)
+  const wasHome = useRef(homeRoute);
   useEffect(() => {
-    if (wasStaff.current === isStaff) return;
-    wasStaff.current = isStaff;
-    if (navigationRef.isReady()) navigationRef.reset({ index: 0, routes: [{ name: isStaff ? 'AdminHome' : 'Home' }] });
-  }, [isStaff]);
+    if (wasHome.current === homeRoute) return;
+    wasHome.current = homeRoute;
+    if (navigationRef.isReady()) navigationRef.reset({ index: 0, routes: [{ name: homeRoute }] });
+  }, [homeRoute]);
 
   if (!SHOP_KEY) return <Splash error="EXPO_PUBLIC_SHOP_KEY is missing in .env (WP admin → Users → shop owner → Shop key)." />;
   if (!ready || !shop) return <Splash shop={shop} error={ready ? shopError : null} onRetry={reloadShop} />;
@@ -149,12 +160,14 @@ function Routes() {
   const screens = {
     ...ROUTES.shop,
     ...(isStaff ? ROUTES.staff : {}),
+    ...(isSeller ? ROUTES.seller : {}),
+    ...(isStaff || isTeam ? ROUTES.team : {}),
     ...(isOwner ? ROUTES.owner : {}),
   };
 
-  // Staff land on the admin home; shoppers (guest or customer) on the shop
+  // Staff land on the admin home, kitchen/riders on their panel; shoppers (guest or customer) on the shop
   return (
-    <Stack.Navigator initialRouteName={isStaff ? 'AdminHome' : 'Home'} screenOptions={{ headerShown: false }}>
+    <Stack.Navigator initialRouteName={homeRoute} screenOptions={{ headerShown: false }}>
       {Object.entries(screens).map(([name, component]) => <Stack.Screen key={name} name={name} component={component} />)}
     </Stack.Navigator>
   );
@@ -170,6 +183,7 @@ export default function App() {
               <StatusBar style="dark" />
               <NotificationListeners />
               <Routes />
+              <PrintHost />
             </NavigationContainer>
           </CartProvider>
           <Toast />

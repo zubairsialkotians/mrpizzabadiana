@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Modal, TouchableOpacity } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, KeyboardAvoidingView } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -102,7 +102,7 @@ function AdjustModal({ row, branchId, onClose, onDone, onHistory }) {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.modalBack}>
+      <KeyboardAvoidingView behavior="padding" style={s.modalBack}>
         <View style={[s.sheet, { maxHeight: '90%' }]}>
           <View style={s.sheetHead}>
             <View style={{ flex: 1 }}>
@@ -131,7 +131,7 @@ function AdjustModal({ row, branchId, onClose, onDone, onHistory }) {
             <Button testID="adj-save" title="Save" onPress={save} loading={saving} disabled={!amount} style={{ flex: 1 }} />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

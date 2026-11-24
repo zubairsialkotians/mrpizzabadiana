@@ -5,6 +5,7 @@ import { api, setSessionToken, setAuthErrorHandler } from '../services/api';
 import { registerPush, registerDevice } from '../services/push';
 import { setCurrency } from '../services/format';
 import { SHOP_KEY } from '../config';
+import { setCatalogueAllowed } from '../services/catalogCache';
 
 // Keys include the shop key so two shops' apps on one test device never mix
 const SESSION_KEY = `session_${SHOP_KEY}`;
@@ -21,7 +22,8 @@ export function useAuth() {
 
 /*
   shop    — the store's public info (name, logo, delivery fee, open/closed …)
-  session — { token, user } where user.kind is 'customer' or 'staff' (role owner|branch).
+  session — { token, user } where user.kind is 'customer' or 'staff' (role owner|branch|kitchen|rider|cashier).
+            isStaff = owner or branch admin (the shop admin); isTeam = kitchen or rider (their own panel).
             No session = guest shopper.
 */
 export function AuthProvider({ children }) {
@@ -61,7 +63,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const afterLogin = useCallback((s) => {
-    if (s.user.kind === 'staff') loadBranches();
+    if (s.user.kind === 'staff' && ['owner', 'branch'].includes(s.user.role)) loadBranches();
     registerPush().then(async (t) => {
       if (t) { pushToken.current = t; await AsyncStorage.setItem(PUSH_KEY, t); }
     });
@@ -145,18 +147,33 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => {
     const user = session?.user || null;
-    const isStaff = user?.kind === 'staff';
+    const role = user?.kind === 'staff' ? user.role : '';
+    const isStaff = role === 'owner' || role === 'branch';
+    const isTeam = role === 'kitchen' || role === 'rider';
+    const isCashier = role === 'cashier';
     return {
       shop, shopError, reloadShop: loadShop, setShop: applyShop,
       session, user, ready,
       login, logout, deleteAccount, startSession, updateUser, refreshUser,
       isCustomer: user?.kind === 'customer',
       isStaff,
-      isOwner: isStaff && user.role === 'owner',
-      isBranchAdmin: isStaff && user.role === 'branch',
+      isOwner: role === 'owner',
+      isBranchAdmin: role === 'branch',
+      isTeam,
+      isKitchen: role === 'kitchen',
+      isRider: role === 'rider',
+      isCashier,
+      // Owner, branch admin and cashier take orders in the app
+      isSeller: isStaff || isCashier,
+      // Where this login starts: shop admin, kitchen/rider panel, cashier's orders, or the shop
+      homeRoute: isStaff ? 'AdminHome' : isTeam ? 'TeamHome' : isCashier ? 'AdminOrders' : 'Home',
       branches, reloadBranches: loadBranches,
     };
   }, [shop, shopError, loadShop, applyShop, session, ready, login, logout, deleteAccount, startSession, updateUser, refreshUser, branches, loadBranches]);
+
+  // Staff may use the menu saved on this device; customers always get the live menu
+  const seller = value.isSeller;
+  useEffect(() => { setCatalogueAllowed(seller); }, [seller]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

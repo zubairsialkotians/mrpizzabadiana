@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Image, Switch } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { Screen, Field, Button, Footer, SectionTitle, Card, Loading, ErrorBox, Chip, ChipRow, s } from '../components/ui';
+import { Screen, Field, Button, Footer, SectionTitle, Card, Loading, ErrorBox, Chip, ChipRow, Segmented, s } from '../components/ui';
 import { PAY_TYPES } from '../components/payments';
 import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
@@ -23,6 +23,10 @@ export default function SettingsScreen({ navigation }) {
         website: data.website || '', facebook: data.facebook || '', instagram: data.instagram || '',
         cod: data.cod !== false, pay_accounts: data.pay_accounts || [],
         delivery_fee: String(data.delivery_fee || ''), free_delivery_over: String(data.free_delivery_over || ''), min_order: String(data.min_order || ''),
+        tax_type: data.tax_type || '', tax_value: data.tax_value ? String(data.tax_value) : '',
+        bill_print: data.bill_print === 'manual' ? 'manual' : 'auto',
+        qr_url: data.qr_url || '', qr_label: data.qr_label || '',
+        service_type: data.service_type || '', service_value: data.service_value ? String(data.service_value) : '',
       });
     }
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -51,7 +55,8 @@ export default function SettingsScreen({ navigation }) {
     setBusy(true);
     try {
       const keys = ['phone', 'whatsapp', 'address', 'notice', 'delivery_fee', 'free_delivery_over', 'min_order', 'pickup', 'is_open', 'closed_message', 'order_prefix', 'bill_caption', 'logo_id',
-        'about', 'email', 'hours', 'map_url', 'website', 'facebook', 'instagram', 'cod', 'pay_accounts'];
+        'about', 'email', 'hours', 'map_url', 'website', 'facebook', 'instagram', 'cod', 'pay_accounts',
+        'tax_type', 'tax_value', 'service_type', 'service_value', 'bill_print', 'qr_url', 'qr_label'];
       const r = await api.saveSettings(Object.fromEntries(keys.map((k) => [k, typeof f[k] === 'boolean' ? (f[k] ? 1 : 0) : f[k]])));
       setShop(r.shop);
       Toast.show({ type: 'success', text1: r.message });
@@ -137,10 +142,47 @@ export default function SettingsScreen({ navigation }) {
       <Field label="Minimum order amount" value={f.min_order} onChangeText={set('min_order')} keyboardType="decimal-pad" hint="0 = no minimum" />
       <Card><Toggle label="Allow pickup from shop" value={f.pickup} onChange={set('pickup')} hint="No delivery charge for pickup" /></Card>
 
+      <SectionTitle>Tax & service charge</SectionTitle>
+      <Text style={[s.itemMeta, { marginBottom: 10 }]}>
+        Added to every order: customers' orders and orders taken by staff (staff can change it on the order). Worked out on items + delivery, after any discount. None by default.
+      </Text>
+      <ChargeField title="Tax" k="tax" f={f} set={set} />
+      <ChargeField title="Service charge" k="service" f={f} set={set} />
+
       <SectionTitle>Orders & bills</SectionTitle>
       <Field label="Order number prefix" value={f.order_prefix} onChangeText={(v) => set('order_prefix')(v.toUpperCase())} autoCapitalize="characters" maxLength={8} placeholder="e.g. MM-" hint="Orders are numbered MM-00001, MM-00002…" />
       <Field label="Bill caption" value={f.bill_caption} onChangeText={set('bill_caption')} multiline maxLength={300} placeholder="Thank you for shopping with us!" />
+      <Field label="QR code link (optional)" value={f.qr_url} onChangeText={set('qr_url')} autoCapitalize="none" autoCorrect={false} keyboardType="url"
+        placeholder="https://instagram.com/yourshop" testID="qr-url"
+        hint="A QR code for this link is printed on every bill. Customers scan it to open the link: your menu, Google reviews, Instagram, WhatsApp, payment page…" />
+      {!!f.qr_url.trim() && (
+        <Field label="Text under the QR code" value={f.qr_label} onChangeText={set('qr_label')} maxLength={60} placeholder="Scan me" testID="qr-label" />
+      )}
+      <Text style={{ fontWeight: '800', color: colors.text, marginTop: 4, marginBottom: 8 }}>Print the bill</Text>
+      <Segmented value={f.bill_print} onChange={set('bill_print')}
+        options={[{ value: 'auto', label: 'When order is placed' }, { value: 'manual', label: 'Only with Print button' }]} />
+      <Text style={[s.itemMeta, { marginTop: 6, marginBottom: 10 }]}>
+        {f.bill_print === 'manual'
+          ? 'Staff print from the Print bill button on the order.'
+          : 'The bill prints as soon as staff place an order. The Print bill button is always on the order too.'} Each phone / tablet picks its printer in My account.
+      </Text>
     </Screen>
+  );
+}
+
+function ChargeField({ title, k, f, set }) {
+  const type = f[`${k}_type`];
+  const pctOver = type === 'percent' && Number(f[`${k}_value`]) > 100;
+  return (
+    <Card>
+      <Text style={{ fontWeight: '800', color: colors.text, marginBottom: 8 }}>{title}</Text>
+      <Segmented value={type} onChange={set(`${k}_type`)}
+        options={[{ value: '', label: 'None' }, { value: 'fixed', label: 'Amount' }, { value: 'percent', label: '%' }]} />
+      {!!type && (
+        <Field label={type === 'percent' ? `${title} %` : `${title} amount per order`} value={f[`${k}_value`]} onChangeText={set(`${k}_value`)}
+          keyboardType="decimal-pad" placeholder="0" error={pctOver ? 'At most 100%' : undefined} style={{ marginTop: 10, marginBottom: 0 }} testID={`set-${k}`} />
+      )}
+    </Card>
   );
 }
 

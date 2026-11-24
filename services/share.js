@@ -14,7 +14,7 @@ const safeName = (n) => String(n).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+/
 
 // The PDF embeds the logo so printing never waits on (or misses) the download
 const logoCache = {};
-async function logoDataUri(url) {
+export async function logoDataUri(url) {
   if (!url || Platform.OS === 'web') return url || '';
   if (logoCache[url]) return logoCache[url];
   try {

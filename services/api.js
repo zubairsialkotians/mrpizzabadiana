@@ -1,4 +1,5 @@
 import { API_BASE, SHOP_KEY } from '../config';
+import { setCatalogueFetcher, savedCatalogue, refreshCatalogue, localCategories, localProducts, localProduct } from './catalogCache';
 
 export class AuthError extends Error {}
 
@@ -54,13 +55,26 @@ async function request(method, path, data = {}) {
 
 const get = (path, params) => request('GET', path, params);
 const post = (path, data) => request('POST', path, data);
+setCatalogueFetcher(get);
+
+// Staff: menu saved on this device (My account → Menu on this device) is served from there; otherwise the server as before
+async function fromMenu(local, live) {
+  const d = await savedCatalogue().catch(() => null);
+  if (d) {
+    const r = local(d);
+    if (r) return r;
+  }
+  return live();
+}
+// Staff changed the catalogue or stock here: update the saved copy in the background
+const changesMenu = (fn) => async (...args) => { const r = await fn(...args); refreshCatalogue(); return r; };
 
 export const api = {
   // Storefront
   shop: () => get('/shop'),
-  categories: () => get('/categories'),
-  products: (p) => get('/products', p),
-  product: (id) => get('/products/view', { id }),
+  categories: () => fromMenu((d) => localCategories(d), () => get('/categories')),
+  products: (p) => fromMenu((d) => localProducts(d, p), () => get('/products', p)),
+  product: (id) => fromMenu((d) => localProduct(d, id), () => get('/products/view', { id })),
   placeOrder: (d) => post('/orders/place', d),
   trackOrder: (id, key) => get('/orders/track', { id, key }),
   sendPaymentProof: (id, image, key) => post('/orders/payment-proof', { id, image, key }),
@@ -100,13 +114,13 @@ export const api = {
   reviews: (p) => get('/admin/reviews', p),
 
   adminCategories: () => get('/admin/categories'),
-  saveCategory: (d) => post('/admin/categories/save', d),
+  saveCategory: changesMenu((d) => post('/admin/categories/save', d)),
   adminItems: (p) => get('/admin/items', p),
-  saveItem: (d) => post('/admin/items/save', d),
+  saveItem: changesMenu((d) => post('/admin/items/save', d)),
   uploadImage: (image, title) => post('/admin/media/upload', { image, title }),
 
   stock: (p) => get('/admin/stock', p),
-  adjustStock: (d) => post('/admin/stock/adjust', d),
+  adjustStock: changesMenu((d) => post('/admin/stock/adjust', d)),
   stockMoves: (p) => get('/admin/stock/moves', p),
 
   customers: (p) => get('/admin/customers', p),
@@ -120,12 +134,30 @@ export const api = {
   deleteExpense: (id) => post('/admin/expenses/delete', { id }),
   expenseCategories: () => get('/admin/expenses/categories'),
 
+  sellers: () => get('/admin/sellers'),
   salesReport: (p) => get('/admin/reports/sales', p),
   profitLoss: (p) => get('/admin/reports/profit-loss', p),
 
   adminNews: (p) => get('/admin/news', p),
   saveNews: (d) => post('/admin/news/save', d),
   deleteNews: (id) => post('/admin/news/delete', { id }),
+
+  // Orders taken in the app (owner / branch admin / cashier)
+  posPlace: (d) => post('/pos/orders/place', d),
+  posUpdate: (d) => post('/pos/orders/update', d),
+
+  // Kitchen & rider logins (owner)
+  team: () => get('/admin/team'),
+  saveTeamMember: (d) => post('/admin/team/save', d),
+
+  // Kitchen & rider panels
+  teamOrders: (p) => get('/team/orders', p),
+  teamOrder: (id) => get('/team/orders/view', { id }),
+  markReady: (id) => post('/team/orders/ready', { id }),
+  riders: (id) => get('/team/riders', { id }),
+  assignRider: (id, rider_id) => post('/team/orders/assign-rider', { id, rider_id }),
+  acceptOrder: (id) => post('/team/orders/accept', { id }),
+  markDelivered: (id) => post('/team/orders/delivered', { id }),
 
   adminBanners: () => get('/admin/banners'),
   saveBanner: (d) => post('/admin/banners/save', d),

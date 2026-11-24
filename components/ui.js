@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, ScrollView,
-  Modal, FlatList, RefreshControl, KeyboardAvoidingView, Platform,
+  Modal, FlatList, RefreshControl, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, statusColors } from '../theme';
 import { RANGE_PRESETS, RANGE_LABELS, rangeFor, rangeLabel, isYmd } from '../services/format';
 import { useAuth } from './AuthContext';
+import { api } from '../services/api';
 
 /* ---------------- Screen ---------------- */
 
@@ -42,7 +43,8 @@ export function Screen({
         </View>
         {right}
       </View>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Android draws edge to edge (the window no longer shrinks for the keyboard): lift the content on both platforms */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {body}
         {footer}
       </KeyboardAvoidingView>
@@ -310,7 +312,7 @@ export function SelectField({
       {!!error && <Text style={s.error}>{error}</Text>}
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View style={s.modalBack}>
+        <KeyboardAvoidingView behavior="padding" style={s.modalBack}>
           <View style={[s.sheet, { paddingBottom: 12 + insets.bottom }]}>
             <View style={s.sheetHead}>
               <Text style={s.sheetTitle}>{label || placeholder}</Text>
@@ -347,7 +349,7 @@ export function SelectField({
               ListEmptyComponent={canCreate ? null : <Empty text="No matches" />}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -362,6 +364,27 @@ export function BranchFilter({ value, onChange, allowAll = true, style }) {
     ...branches.map((b) => ({ value: b.id, label: b.name, sub: b.address })),
   ];
   return <SelectField compact value={value} options={options} onChange={onChange} placeholder="Choose branch" style={style} label={undefined} />;
+}
+
+// Owner / branch admin: who took the orders — everyone, online (customers), or one cashier / admin.
+// value: '' | 'online' | user id. Renders nothing for other roles.
+export function SellerFilter({ value, onChange, style }) {
+  const { isStaff } = useAuth();
+  const [sellers, setSellers] = useState([]);
+  useEffect(() => {
+    if (isStaff) api.sellers().then((r) => setSellers(r.sellers || [])).catch(() => {});
+  }, [isStaff]);
+  if (!isStaff) return null;
+  const roleLabel = { owner: 'Owner', branch: 'Branch admin', cashier: 'Cashier' };
+  const options = [
+    { value: '', label: 'Taken by: everyone' },
+    { value: 'online', label: 'Online (customers)' },
+    ...sellers.map((u) => ({ value: String(u.id), label: u.name, sub: roleLabel[u.role] || u.role })),
+  ];
+  return (
+    <SelectField compact value={value} options={options} onChange={(v) => onChange(String(v))} placeholder="Taken by"
+      label={undefined} style={style} />
+  );
 }
 
 // Owner forms: pick which branch a new record belongs to (only with 2+ branches)
@@ -394,7 +417,7 @@ export function DateRangeBar({ value, onChange, presets = RANGE_PRESETS }) {
         <Chip icon="calendar-outline" label={value.key === 'custom' ? rangeLabel(value) : 'Custom'} active={value.key === 'custom'} onPress={() => setOpen(true)} />
       </ChipRow>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
+        <KeyboardAvoidingView behavior="padding" style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
           <View style={[s.card, { padding: 18 }]}>
             <Text style={[s.sheetTitle, { marginBottom: 12 }]}>Custom dates</Text>
             <Field label="From (YYYY-MM-DD)" value={from} onChangeText={setFrom} placeholder="2026-11-01" autoCapitalize="none" keyboardType="numbers-and-punctuation" />
@@ -405,7 +428,7 @@ export function DateRangeBar({ value, onChange, presets = RANGE_PRESETS }) {
               <Button title="Apply" disabled={!valid} onPress={() => { onChange(rangeFor('custom', { from, to })); setOpen(false); }} style={{ flex: 1 }} />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

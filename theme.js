@@ -54,9 +54,11 @@ export const colors = {
 export const statusColors = {
   pending:          { fg: '#b45309', bg: '#fdf1e2' },
   confirmed:        { fg: '#1d4ed8', bg: '#e8eefc' },
+  ready_for_delivery: { fg: '#0f766e', bg: '#e0f4f1' },
   out_for_delivery: { fg: '#7c3aed', bg: '#f1eafe' },
   ready:            { fg: '#7c3aed', bg: '#f1eafe' },
   delivered:        { fg: '#15803d', bg: '#e7f6ec' },
+  completed:        { fg: '#ffffff', bg: '#15803d' },
   cancelled:        { fg: '#c0392b', bg: '#fbe9e7' },
   active:           { fg: '#15803d', bg: '#e7f6ec' },
   inactive:         { fg: '#64748b', bg: '#eef1f5' },

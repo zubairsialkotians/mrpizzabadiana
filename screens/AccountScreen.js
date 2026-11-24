@@ -3,17 +3,19 @@ import { View, Text, Linking } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Screen, Card, KV, Button, ListItem, SectionTitle } from '../components/ui';
 import { useAuth } from '../components/AuthContext';
+import { MenuSyncCard } from '../components/MenuSync';
+import { PrinterCard } from '../components/PrintBill';
 import { confirmAction } from '../services/confirm';
 import { ROLE_LABELS } from '../services/format';
 import { colors } from '../theme';
 
 // Guests: log in / register. Customers: profile, orders. Staff: their account + admin.
 export default function AccountScreen({ navigation }) {
-  const { user, shop, isStaff, logout, deleteAccount } = useAuth();
+  const { user, shop, isStaff, isTeam, isRider, isCashier, isSeller, logout, deleteAccount } = useAuth();
 
   const signOut = async () => {
     if (await confirmAction('Log out?', '', 'Log out', true)) {
-      const wasStaff = isStaff;
+      const wasStaff = isStaff || isTeam || isCashier;
       await logout();
       if (!wasStaff) navigation.reset({ index: 0, routes: [{ name: 'Home' }] }); // staff: the app swaps back to the shop by itself
     }
@@ -56,11 +58,15 @@ export default function AccountScreen({ navigation }) {
             <Text style={{ fontSize: 18, fontWeight: '800', color: colors.black }}>{user.name}</Text>
             <Text style={{ color: colors.muted, marginBottom: 6 }}>{user.email}</Text>
             {!!user.phone && <KV label="Phone" value={user.phone} />}
-            {isStaff && <KV label="Role" value={`${ROLE_LABELS[user.role]}${user.branch ? ` · ${user.branch.name}` : ''}`} />}
+            {(isStaff || isTeam || isCashier) && <KV label="Role" value={`${ROLE_LABELS[user.role]}${user.branch ? ` · ${user.branch.name}` : ''}`} />}
             {!!user.address && <Text style={{ color: colors.text, marginTop: 4 }}>{user.address}</Text>}
           </Card>
           {isStaff ? (
             <ListItem icon="speedometer-outline" title="Shop admin" subtitle="Orders, items, stock and reports" onPress={() => navigation.navigate('AdminHome')} />
+          ) : isCashier ? (
+            <ListItem icon="receipt-outline" title="My orders" subtitle="Take orders and manage the ones you took" onPress={() => navigation.navigate('AdminOrders')} />
+          ) : isTeam ? (
+            <ListItem icon={isRider ? 'bicycle-outline' : 'restaurant-outline'} title={isRider ? 'My deliveries' : 'Kitchen orders'} onPress={() => navigation.navigate('TeamHome')} />
           ) : (
             <>
               <ListItem icon="receipt-outline" title="My orders" onPress={() => navigation.navigate('MyOrders')} />
@@ -69,6 +75,16 @@ export default function AccountScreen({ navigation }) {
           )}
           <ListItem icon="key-outline" title={user.has_password ? 'Change password' : 'Set a password'}
             subtitle={user.has_password ? undefined : 'So you can log in on other phones'} onPress={() => navigation.navigate('Password')} />
+
+          {/* Owner / branch admin / cashier take orders: menu copy and printer for this phone / tablet */}
+          {isSeller && (
+            <>
+              <SectionTitle>Menu on this device</SectionTitle>
+              <MenuSyncCard />
+              <SectionTitle>Printer on this device</SectionTitle>
+              <PrinterCard />
+            </>
+          )}
         </>
       )}
 
@@ -85,7 +101,7 @@ export default function AccountScreen({ navigation }) {
 
       <SectionTitle>About</SectionTitle>
       <ListItem icon="shield-checkmark-outline" title="Privacy policy" subtitle="What we collect and how we use it" onPress={() => navigation.navigate('PrivacyPolicy')} />
-      {user && !isStaff && (
+      {user && user.kind === 'customer' && (
         <ListItem icon="trash-outline" title="Delete my account" subtitle="Remove your account and personal data" onPress={deleting ? undefined : requestDeletion} />
       )}
 

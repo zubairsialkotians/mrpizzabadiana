@@ -33,7 +33,8 @@ export function QtyStepper({ product, qty, onChange, small, testID }) {
 }
 
 // Grid card: tap → product page; "Add" puts the smallest amount in the cart
-export function ProductCard({ p, onPress, width }) {
+// onSizes (tablet order taking): "Choose size" opens a quick size picker instead of the product page
+export function ProductCard({ p, onPress, width, onSizes }) {
   const cart = useCart();
   // Fast food with several sizes: size is chosen on the product page. One size only: add it straight away.
   const sized = p.sizes?.length > 1;
@@ -57,7 +58,7 @@ export function ProductCard({ p, onPress, width }) {
         </View>
         <View style={{ flex: 1 }} />
         {sized && p.in_stock && (
-          <TouchableOpacity style={st.addBtn} onPress={onPress} testID={`sizes-${p.id}`}>
+          <TouchableOpacity style={st.addBtn} onPress={onSizes ? () => onSizes(p) : onPress} testID={`sizes-${p.id}`}>
             <Ionicons name={inCart > 0 ? 'checkmark' : 'resize-outline'} size={16} color={colors.onBrand} />
             <Text style={st.addText}>{inCart > 0 ? `${inCart} in cart · add more` : 'Choose size'}</Text>
           </TouchableOpacity>

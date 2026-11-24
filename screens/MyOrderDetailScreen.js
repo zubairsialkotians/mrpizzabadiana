@@ -80,6 +80,11 @@ export default function MyOrderDetailScreen({ navigation, route }) {
           ? <Text style={s.itemSub}>Pick up from {o.branch_name}{o.branch_address ? `, ${o.branch_address}` : ''}</Text>
           : <Text style={s.itemSub}>{o.address}</Text>}
         {!!o.note && <Text style={[s.itemMeta, { marginTop: 4 }]}>Note: {o.note}</Text>}
+        {o.status === 'out_for_delivery' && !!o.rider_name && (
+          <Text style={[s.itemSub, { color: colors.text, marginTop: 6 }]} onPress={o.rider_phone ? () => Linking.openURL(`tel:${o.rider_phone}`) : undefined}>
+            Rider: {o.rider_name}{o.rider_phone ? ` · ${o.rider_phone} (tap to call)` : ''}
+          </Text>
+        )}
       </Card>
       <SectionTitle>Items</SectionTitle>
       <OrderItems order={o} />

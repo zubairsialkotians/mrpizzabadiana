@@ -1,6 +1,8 @@
 import React, { forwardRef } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors } from '../theme';
+import { qrMatrix } from '../services/qr';
+import { DEVELOPER_LINE } from '../services/documents';
 
 /*
   Draws a document model (services/documents.js) as native views.
@@ -93,6 +95,8 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
 
       {m.notes?.map((n, i) => <Text key={i} style={[st.muted, { marginTop: i ? 2 : 12, fontSize: 11 }]}>{n}</Text>)}
 
+      {!!m.qr && <BillQr url={m.qr.url} label={m.qr.label} />}
+
       {!!(c.bill_caption || c.support_phone) && (
         <View style={st.footer}>
           {!!c.bill_caption && <Text style={st.caption}>{c.bill_caption}</Text>}
@@ -101,9 +105,28 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
           )}
         </View>
       )}
+      <Text style={st.dev}>{DEVELOPER_LINE}</Text>
     </View>
   );
 });
+
+// QR code drawn with plain views (dark runs per row), so "Share image" and printing capture it too
+function BillQr({ url, label, size = 116 }) {
+  const m = qrMatrix(url);
+  if (!m) return null;
+  const n = m.size + 4; // quiet zone
+  const cell = size / n;
+  return (
+    <View style={{ alignItems: 'center', marginTop: 14 }}>
+      <View style={{ width: size, height: size, backgroundColor: '#fff' }}>
+        {m.rows.map((runs, r) => runs.map(([c, len]) => (
+          <View key={`${r}-${c}`} style={{ position: 'absolute', top: (r + 2) * cell, left: (c + 2) * cell, width: len * cell + 0.4, height: cell + 0.4, backgroundColor: '#000' }} />
+        )))}
+      </View>
+      {!!label && <Text style={{ fontWeight: '800', color: colors.text, marginTop: 4, fontSize: 13 }}>{label}</Text>}
+    </View>
+  );
+}
 
 export default DocView;
 
@@ -135,6 +158,7 @@ const st = StyleSheet.create({
   totBig: { borderTopWidth: 1, borderTopColor: colors.text, paddingTop: 5, marginTop: 3 },
   totDiv: { borderTopWidth: 1, borderTopColor: colors.faint, borderStyle: 'dashed', paddingTop: 5, marginTop: 3 },
   totText: { fontSize: 12, color: colors.text },
+  dev: { marginTop: 10, textAlign: 'center', color: colors.faint, fontSize: 10 },
   footer: { marginTop: 16, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, alignItems: 'center', gap: 2 },
   caption: { fontStyle: 'italic', color: colors.text, textAlign: 'center', fontSize: 12 },
 });

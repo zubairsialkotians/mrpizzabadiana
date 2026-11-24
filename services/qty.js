@@ -56,3 +56,17 @@ export function deliveryFee(shop, subtotal, fulfilment = 'delivery') {
   const free = Number(shop.free_delivery_over) || 0;
   return free > 0 && subtotal >= free ? 0 : Number(shop.delivery_fee) || 0;
 }
+
+// The shop's default tax and service charge on items + delivery, as the server adds them to a customer's order
+export function shopCharges(shop, subtotal, fee) {
+  const base = round2(subtotal + fee);
+  const one = (k) => {
+    const type = shop?.[`${k}_type`];
+    const value = Number(shop?.[`${k}_value`]) || 0;
+    if (!type || value <= 0) return { amount: 0, label: '' };
+    return { amount: round2(type === 'percent' ? base * Math.min(value, 100) / 100 : value), label: type === 'percent' ? ` (${value}%)` : '' };
+  };
+  const tax = one('tax');
+  const service = one('service');
+  return { tax, service, total: round2(base + tax.amount + service.amount) };
+}

@@ -3,11 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SHOP_KEY } from '../config';
 import { round2, cleanQty } from '../services/qty';
 
-const CART_KEY = `cart_${SHOP_KEY}`;
 const CartContext = createContext(null);
+const CART_KEY = `cart_${SHOP_KEY}`;
 
 export function useCart() {
+  const scoped = useContext(ScopeContext);
   const ctx = useContext(CartContext);
+  if (scoped) return scoped;
   if (!ctx) throw new Error('useCart must be inside CartProvider');
   return ctx;
 }
@@ -22,33 +24,31 @@ export const lineKey = (itemId, size) => `${itemId}|${size || ''}`;
 export const lineName = (l) => (l.size ? `${l.name} (${l.size})` : l.name);
 const sizeOf = (p, size) => (p.sizes || []).find((z) => z.name === size);
 
-export function CartProvider({ children }) {
-  const [lines, setLines] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+// Inside <LinesScope value={store}> (changing a placed order's items), useCart() works on that store instead of the cart
+const ScopeContext = createContext(null);
+export function LinesScope({ value, children }) {
+  return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>;
+}
 
-  useEffect(() => {
-    AsyncStorage.getItem(CART_KEY)
-      .then((raw) => { if (raw) setLines(JSON.parse(raw) || []); })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
+const lineFrom = (p, qty, size = '') => ({
+  item_id: p.id, size: size || '', name: p.name, unit: p.unit, price: size ? sizeOf(p, size)?.price ?? p.price : p.price, image: p.image,
+  min_qty: p.min_qty, qty_step: p.qty_step, max_qty: p.max_qty, qty_options: p.qty_options || [], qty: cleanQty(qty),
+});
+const same = (l, itemId, size) => l.item_id === itemId && (l.size || '') === (size || '');
 
-  useEffect(() => {
-    if (loaded) AsyncStorage.setItem(CART_KEY, JSON.stringify(lines)).catch(() => {});
-  }, [lines, loaded]);
+/*
+  Lines with the cart's rules (add, set, remove, sizes as their own lines). The cart uses it, and so does
+  changing the items of an order already placed (PosOrderScreen), so the shop grid and order panel work for both.
+*/
+export function useLineStore(initial = []) {
+  const [lines, setLines] = useState(initial);
 
-  const lineFrom = (p, qty, size = '') => ({
-    item_id: p.id, size: size || '', name: p.name, unit: p.unit, price: size ? sizeOf(p, size)?.price ?? p.price : p.price, image: p.image,
-    min_qty: p.min_qty, qty_step: p.qty_step, max_qty: p.max_qty, qty_options: p.qty_options || [], qty: cleanQty(qty),
-  });
-  const same = (l, itemId, size) => l.item_id === itemId && (l.size || '') === (size || '');
-
-  // Adds to what's already in the cart
+  // Adds to what's already there
   const add = useCallback((p, qty, size = '') => {
     setLines((prev) => {
       const cur = prev.find((l) => same(l, p.id, size));
       if (!cur) return [...prev, lineFrom(p, qty, size)];
-      return prev.map((l) => (same(l, p.id, size) ? { ...lineFrom(p, l.qty + qty, size) } : l));
+      return prev.map((l) => (same(l, p.id, size) ? { ...lineFrom(p, l.qty + qty, size), price: l.price } : l));
     });
   }, []);
 
@@ -63,7 +63,7 @@ export function CartProvider({ children }) {
   }, []);
 
   const remove = useCallback((itemId, size = '') => setLines((prev) => prev.filter((l) => !same(l, itemId, size))), []);
-  const clear = useCallback(() => setLines([]), []);
+  const clearLines = useCallback(() => setLines([]), []);
 
   // Fresh product data from the server: update prices/limits, drop what's gone (incl. removed sizes)
   const sync = useCallback((products) => {
@@ -78,14 +78,41 @@ export function CartProvider({ children }) {
       .map((l) => ({ ...lineFrom(byId[l.item_id], l.qty, l.size), qty: l.qty })));
   }, []);
 
-  const value = useMemo(() => ({
-    lines, loaded, add, setQty, remove, clear, sync,
+  // Only the quantity rules and photo (keeps prices and lines no longer in the catalogue: placed orders)
+  const applyRules = useCallback((products) => {
+    const byId = Object.fromEntries(products.map((p) => [p.id, p]));
+    setLines((prev) => prev.map((l) => {
+      const p = byId[l.item_id];
+      return p ? { ...l, min_qty: p.min_qty, qty_step: p.qty_step, qty_options: p.qty_options || [], image: l.image || p.image } : l;
+    }));
+  }, []);
+
+  return useMemo(() => ({
+    lines, setLines, add, setQty, remove, clear: clearLines, sync, applyRules,
     count: lines.length,
     // qtyOf(id): all sizes together; qtyOf(id, size): that size only
     qtyOf: (id, size) => lines.filter((l) => l.item_id === id && (size === undefined || (l.size || '') === (size || '')))
       .reduce((a, l) => a + l.qty, 0),
     subtotal: round2(lines.reduce((a, l) => a + round2(l.qty * l.price), 0)),
-  }), [lines, loaded, add, setQty, remove, clear, sync]);
+  }), [lines, add, setQty, remove, clearLines, sync, applyRules]);
+}
 
+export function CartProvider({ children }) {
+  const store = useLineStore();
+  const { lines, setLines } = store;
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CART_KEY)
+      .then((raw) => { if (raw) setLines(JSON.parse(raw) || []); })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (loaded) AsyncStorage.setItem(CART_KEY, JSON.stringify(lines)).catch(() => {});
+  }, [lines, loaded]);
+
+  const value = useMemo(() => ({ ...store, loaded }), [store, loaded]);
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

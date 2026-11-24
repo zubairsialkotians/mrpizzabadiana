@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Modal, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, Modal, TouchableOpacity, StyleSheet, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, Field, s } from './ui';
 import { money, niceDate, cashLabel, paymentLabel } from '../services/format';
@@ -134,7 +134,7 @@ export function PaymentCard({ order: o, staff, onSend, sending, onVerify, onReje
 
       <ProofViewer uri={view} onClose={() => setView(null)} />
       <Modal visible={rejectOpen} transparent animationType="fade" onRequestClose={() => setRejectOpen(false)}>
-        <View style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
+        <KeyboardAvoidingView behavior="padding" style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
           <View style={[s.card, { padding: 18 }]}>
             <Text style={[s.sheetTitle, { marginBottom: 8 }]}>Payment not accepted?</Text>
             <Text style={{ color: colors.muted, marginBottom: 10 }}>The customer is notified and can send a new screenshot.</Text>
@@ -145,7 +145,7 @@ export function PaymentCard({ order: o, staff, onSend, sending, onVerify, onReje
                 onPress={async () => { if (await onReject(reason.trim())) { setRejectOpen(false); setReason(''); } }} style={{ flex: 1 }} />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Card>
   );

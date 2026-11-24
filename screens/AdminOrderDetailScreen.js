@@ -1,21 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, Linking } from 'react-native';
+import { View, Text, Modal, Linking, KeyboardAvoidingView } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Screen, Card, KV, Loading, ErrorBox, SectionTitle, Button, Footer, Field, SelectField, s } from '../components/ui';
 import { OrderItems, OrderTotals, StatusBadge } from '../components/orders';
 import { PaymentCard } from '../components/payments';
 import { ReviewView } from '../components/reviews';
+import { useTeamActions } from '../components/team';
+import { PrintBillButton } from '../components/PrintBill';
 import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { confirmAction } from '../services/confirm';
-import { money, niceDate } from '../services/format';
+import { money, niceDate, STATUS_LABELS } from '../services/format';
 import { colors } from '../theme';
 
 const waNumber = (p) => (p || '').replace(/\D/g, '').replace(/^0/, '92');
 
 export default function AdminOrderDetailScreen({ navigation, route }) {
-  const { isOwner, branches } = useAuth();
+  const { isOwner, isCashier, branches } = useAuth();
   const { data: o, loading, error, reload, refresh, refreshing, setData } = useLoad(
     () => api.adminOrder(route.params.id).then((r) => r.order), [route.params.id],
   );
@@ -39,6 +41,8 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
     }
   };
   const setStatus = (status, why) => run(status, () => api.setOrderStatus(o.id, status, why));
+  // Give to rider (shared with the kitchen panel); keeps the customer's order count shown here
+  const team = useTeamActions((order) => (order ? setData((prev) => ({ ...order, customer_orders: prev?.customer_orders })) : reload()));
 
   if (loading) return <Screen title="Order"><Loading /></Screen>;
   if (error) return <Screen title="Order"><ErrorBox message={error} onRetry={reload} /></Screen>;
@@ -49,26 +53,48 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
 
   const actions = [];
   const btn = (key, title, onPress, variant = 'success', icon) => (
-    <Button key={key} testID={`act-${key}`} title={title} variant={variant} icon={icon} loading={busy === key} onPress={onPress} style={{ flex: 1 }} />
+    <Button key={key} testID={`act-${key}`} title={title} variant={variant} icon={icon} loading={busy === key || (key === 'rider' && !!team.busy)} onPress={onPress} style={{ flex: 1 }} />
   );
   if (o.status === 'pending') actions.push(btn('confirmed', 'Confirm order', confirm, 'success', 'checkmark-circle-outline'));
+  const delivery = o.fulfilment !== 'pickup';
   if (o.status === 'confirmed') {
-    actions.push(o.fulfilment === 'pickup'
-      ? btn('ready', 'Ready for pickup', () => setStatus('ready'), 'primary', 'bag-check-outline')
-      : btn('out_for_delivery', 'Out for delivery', () => setStatus('out_for_delivery'), 'primary', 'bicycle-outline'));
+    actions.push(delivery
+      ? btn('ready_for_delivery', 'Ready for delivery', () => setStatus('ready_for_delivery'), 'primary', 'restaurant-outline')
+      : btn('ready', 'Ready for pickup', () => setStatus('ready'), 'primary', 'bag-check-outline'));
   }
-  if (['confirmed', 'out_for_delivery', 'ready'].includes(o.status)) {
+  if (delivery && ['ready_for_delivery', 'out_for_delivery'].includes(o.status)) {
+    actions.push(btn('rider', o.rider_id ? 'Change rider' : 'Give to rider', () => team.openAssign(o), 'primary', 'bicycle-outline'));
+  }
+  if (['confirmed', 'ready_for_delivery', 'out_for_delivery', 'ready'].includes(o.status)) {
     actions.push(btn('delivered', o.fulfilment === 'pickup' ? 'Picked up' : 'Delivered', () => setStatus('delivered'), 'success', 'checkmark-done-outline'));
   }
   if (o.status === 'delivered') {
+    actions.push(btn('completed', 'Mark completed', () => setStatus('completed'), 'success', 'checkmark-circle'));
+  }
+  // A completed order taken in the app is final
+  const locked = o.status === 'completed' && !!o.created_by;
+  if (!isCashier && !locked && (o.status === 'delivered' || o.status === 'completed')) {
     actions.push(btn('return', 'Record a return', () => navigation.navigate('ReturnForm', { order: o }), 'outline', 'return-down-back-outline'));
   }
-  const canCancel = !['delivered', 'cancelled'].includes(o.status);
+  const canCancel = !['delivered', 'completed', 'cancelled'].includes(o.status);
+
+  // Owner / branch admin can move an order to any status (stock follows on the server)
+  const STATUS_ORDER = ['pending', 'confirmed', 'ready_for_delivery', 'out_for_delivery', 'ready', 'delivered', 'completed', 'cancelled'];
+  const statusOptions = STATUS_ORDER
+    .filter((st) => st !== o.status && (delivery ? st !== 'ready' : !['ready_for_delivery', 'out_for_delivery'].includes(st)))
+    .map((st) => ({ value: st, label: st === 'delivered' && !delivery ? 'Picked up' : STATUS_LABELS[st] }));
+  const changeStatus = async (st) => {
+    if (st === 'cancelled') { setCancelOpen(true); return; }
+    const stockNote = o.status === 'pending' || o.status === 'cancelled'
+      ? (st === 'pending' ? '' : ` Stock will be taken from ${o.branch_name}.`)
+      : (st === 'pending' ? ' The items go back into stock.' : '');
+    if (await confirmAction(`Change to "${STATUS_LABELS[st]}"?`, `${o.name} will be notified.${stockNote}`, 'Change')) setStatus(st);
+  };
 
   return (
     <Screen
       title={o.order_no}
-      subtitle={`${niceDate(o.created_at)} · ${o.branch_name}`}
+      subtitle={`${niceDate(o.created_at)} · ${o.branch_name}${o.created_by_name ? ` · by ${o.created_by_name}` : ''}`}
       right={<StatusBadge status={o.status} />}
       onRefresh={refresh}
       refreshing={refreshing}
@@ -86,12 +112,15 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
           {o.fulfilment === 'pickup' ? 'Pickup from shop' : `Deliver to: ${o.address}`}
         </Text>
         {!!o.note && <Text style={[s.itemSub, { color: colors.warning, marginTop: 4 }]}>Note: {o.note}</Text>}
+        {!!o.rider_name && <Text style={[s.itemSub, { color: colors.text, marginTop: 4 }]}>Rider: {o.rider_name}{o.rider_phone ? ` · ${o.rider_phone}` : ''}</Text>}
         <Text style={[s.itemMeta, { marginTop: 4 }]}>{o.customer_orders} order{o.customer_orders === 1 ? '' : 's'} from this customer</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
           <Button small variant="ghost" icon="call-outline" title="Call" onPress={() => Linking.openURL(`tel:${o.phone}`)} style={{ flex: 1 }} />
           <Button small variant="ghost" icon="logo-whatsapp" title="WhatsApp" onPress={() => Linking.openURL(`https://wa.me/${waNumber(o.phone)}`)} style={{ flex: 1 }} />
           <Button small variant="ghost" icon="share-social-outline" title="Bill" onPress={() => navigation.navigate('Bill', { id: o.id })} style={{ flex: 1 }} />
         </View>
+        {/* Always here, whatever the order's status (Shop settings decide whether bills also print by themselves) */}
+        <PrintBillButton order={o} style={{ marginTop: 8 }} />
       </Card>
 
       {isOwner && o.status === 'pending' && branches.length > 1 && (
@@ -103,6 +132,23 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
         />
       )}
 
+      {o.can_edit && (
+        <Button testID="edit-order" title="Change items, discount or charges" icon="create-outline" variant="ghost"
+          onPress={() => navigation.navigate('PosOrder', { order: o })} style={{ marginBottom: 14 }} />
+      )}
+      {locked ? (
+        <Text style={[s.itemMeta, { marginBottom: 14 }]}>This order is completed and can no longer be changed.</Text>
+      ) : (
+      <SelectField
+        label="Change status (any stage)"
+        value=""
+        placeholder={`Now: ${STATUS_LABELS[o.status] || o.status}`}
+        options={statusOptions}
+        searchable={false}
+        onChange={changeStatus}
+      />
+      )}
+
       <SectionTitle>Payment</SectionTitle>
       <PaymentCard order={o} staff busy={busy}
         onVerify={() => run('verified', () => api.setPaymentStatus(o.id, 'verified'))}
@@ -110,7 +156,7 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
 
       {!!o.review && (
         <>
-          <SectionTitle right={<Text style={s.itemMeta} onPress={() => navigation.navigate('Reviews')}>All reviews ›</Text>}>Customer review</SectionTitle>
+          <SectionTitle right={isCashier ? null : <Text style={s.itemMeta} onPress={() => navigation.navigate('Reviews')}>All reviews ›</Text>}>Customer review</SectionTitle>
           <ReviewView review={o.review} />
         </>
       )}
@@ -138,8 +184,9 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
         ))}
       </Card>
 
+      {team.picker}
       <Modal visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
-        <View style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
+        <KeyboardAvoidingView behavior="padding" style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
           <View style={[s.card, { padding: 18 }]}>
             <Text style={[s.sheetTitle, { marginBottom: 8 }]}>Cancel order?</Text>
             {o.status !== 'pending' && <Text style={{ color: colors.muted, marginBottom: 10 }}>The items go back into stock.</Text>}
@@ -149,7 +196,7 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
               <Button title="Cancel order" variant="danger" loading={busy === 'cancelled'} onPress={() => setStatus('cancelled', reason)} style={{ flex: 1 }} />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

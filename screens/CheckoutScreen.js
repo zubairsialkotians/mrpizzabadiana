@@ -8,7 +8,7 @@ import { useCart, lineKey, lineName } from '../components/CartContext';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { money, qtyLabel } from '../services/format';
-import { deliveryFee, round2 } from '../services/qty';
+import { deliveryFee, shopCharges, round2 } from '../services/qty';
 import { pickImage } from '../services/images';
 import { PAY_TYPES, AccountBox, cashLabel } from '../components/payments';
 import { SHOP_KEY } from '../config';
@@ -35,7 +35,8 @@ export default function CheckoutScreen({ navigation }) {
   const set = (k) => (v) => { setForm({ ...form, [k]: v }); setErrors({ ...errors, [k]: '' }); };
 
   const fee = deliveryFee(shop, cart.subtotal, fulfilment);
-  const total = round2(cart.subtotal + fee);
+  const charges = shopCharges(shop, cart.subtotal, fee);
+  const total = charges.total;
 
   const place = async () => {
     const e = {};
@@ -158,6 +159,8 @@ export default function CheckoutScreen({ navigation }) {
         <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 6 }} />
         <KV label="Items" value={money(cart.subtotal)} />
         <KV label={fulfilment === 'pickup' ? 'Pickup' : 'Delivery'} value={fee ? money(fee) : 'Free'} tone={fee ? undefined : 'good'} />
+        {charges.tax.amount > 0 && <KV label={`Tax${charges.tax.label}`} value={`+${money(charges.tax.amount)}`} />}
+        {charges.service.amount > 0 && <KV label={`Service charge${charges.service.label}`} value={`+${money(charges.service.amount)}`} />}
         <KV label="Total to pay" value={money(total)} bold />
         <Text style={s.itemMeta}>Payment: {payAcc ? payAcc.name : cashLabel(fulfilment).toLowerCase()}</Text>
       </Card>

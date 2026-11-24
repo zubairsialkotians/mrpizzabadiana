@@ -1,3 +1,8 @@
+import { qrSvg } from './qr';
+import { DEVELOPER_PHONE } from '../config';
+
+// Last line of every bill and document
+export const DEVELOPER_LINE = `Software development: ${DEVELOPER_PHONE.replace(/^(\d{4})(\d+)$/, '$1 $2')}`;
 import { money, niceDate, currencySymbol, qtyLabel, STATUS_LABELS, paymentLabel } from './format';
 
 /*
@@ -10,6 +15,7 @@ import { money, niceDate, currencySymbol, qtyLabel, STATUS_LABELS, paymentLabel 
   model = {
     title, stamp?,                       // stamp: big red word, e.g. CANCELLED
     company: { name, logo_url, support_phone, bill_caption },
+    qr?: { url, label },                 // QR code at the bottom (Shop settings → QR code link)
     from: [lines],                       // branch name / address / phone
     meta: [[label, value]],              // bill no, date …
     party?: { heading, lines: [first line is bold] },
@@ -38,6 +44,9 @@ export function buildBill(o, shop) {
   const totals = [
     { label: 'Items', value: money(o.subtotal) },
     { label: o.fulfilment === 'pickup' ? 'Pickup' : 'Delivery', value: o.delivery_fee ? money(o.delivery_fee) : 'Free' },
+    ...(o.discount > 0 ? [{ label: `Discount${o.discount_type === 'percent' ? ` (${Number(o.discount_value)}%)` : ''}`, value: `-${money(o.discount)}` }] : []),
+    ...(o.tax > 0 ? [{ label: `Tax${o.tax_type === 'percent' ? ` (${Number(o.tax_value)}%)` : ''}`, value: `+${money(o.tax)}` }] : []),
+    ...(o.service > 0 ? [{ label: `Service charge${o.service_type === 'percent' ? ` (${Number(o.service_value)}%)` : ''}`, value: `+${money(o.service)}` }] : []),
     { label: 'Total', value: money(o.total), bold: true, big: true },
   ];
   if (o.refunded > 0) {
@@ -68,6 +77,7 @@ export function buildBill(o, shop) {
     }],
     totals,
     notes: [o.note ? `Note: ${o.note}` : '', cancelled && o.cancel_reason ? `Cancelled: ${o.cancel_reason}` : ''].filter(Boolean),
+    qr: shop?.qr_url ? { url: shop.qr_url, label: shop.qr_label || 'Scan me' } : null,
   };
 }
 
@@ -134,8 +144,12 @@ export function docHtml(m, logoSrc) {
   .totals tr.div td { border-top: 1px dashed #94a3b8; padding-top: 6px; }
   .good { color: #15803d; } .bad { color: #c0392b; }
   .notes { margin-top: 12px; color: #64748b; font-size: 11px; }
+  .dev { margin-top: 10px; text-align: center; color: #94a3b8; font-size: 10px; }
   .pfoot { margin-top: 18px; text-align: center; border-top: 1px solid #e2e7f0; padding-top: 10px; }
   .caption { font-style: italic; white-space: pre-line; }
+  .qr { text-align: center; margin-top: 14px; page-break-inside: avoid; }
+  .qr svg { display: block; margin: 0 auto; }
+  .qr .ql { font-weight: 800; font-size: 13px; margin-top: 4px; }
 </style></head><body>
 <div class="top">
   <div class="co">${logoSrc ? `<img src="${esc(logoSrc)}">` : ''}<div>
@@ -155,9 +169,11 @@ ${blocks}
 ${m.totals ? `<table class="totals">${m.totals.map((t) =>
     `<tr class="${[t.bold && 'b', t.big && 'big', t.divider && 'div'].filter(Boolean).join(' ')}"><td>${esc(t.label)}</td><td class="${toneCls(t.tone)}">${esc(t.value)}</td></tr>`).join('')}</table>` : ''}
 ${m.notes?.length ? `<div class="notes">${m.notes.map((n) => `<div>${esc(n)}</div>`).join('')}</div>` : ''}
+${m.qr ? `<div class="qr">${qrSvg(m.qr.url, 120)}<div class="ql">${esc(m.qr.label)}</div></div>` : ''}
 ${c.bill_caption || c.support_phone ? `<div class="pfoot">
   ${c.bill_caption ? `<div class="caption">${esc(c.bill_caption)}</div>` : ''}
   ${c.support_phone ? `<div class="muted">For support call: <b>${esc(c.support_phone)}</b></div>` : ''}
 </div>` : ''}
+<div class="dev">${esc(DEVELOPER_LINE)}</div>
 </body></html>`;
 }

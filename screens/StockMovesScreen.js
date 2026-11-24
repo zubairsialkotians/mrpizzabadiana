@@ -6,7 +6,7 @@ import { qty, niceDate } from '../services/format';
 
 const TYPE_LABELS = {
   purchase: 'Stock in', out: 'Stock out', adjust: 'Count adjusted', sale: 'Order confirmed',
-  cancel: 'Order cancelled', return: 'Customer return',
+  cancel: 'Order cancelled', return: 'Customer return', edit: 'Order changed',
 };
 
 export default function StockMovesScreen({ route }) {

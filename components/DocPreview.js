@@ -7,7 +7,7 @@ import { sharePdf, shareImage } from '../services/share';
 import { colors } from '../theme';
 
 // Preview of a bill / order sheet with "Share PDF" and "Share image" (→ WhatsApp)
-export default function DocPreview({ title, subtitle, model, fileName, loading, error, onRetry, children }) {
+export default function DocPreview({ title, subtitle, model, fileName, loading, error, onRetry, children, extraFooter }) {
   const { width } = useWindowDimensions();
   const docWidth = Math.min(width - 28, 520);
   const ref = useRef(null);
@@ -31,6 +31,7 @@ export default function DocPreview({ title, subtitle, model, fileName, loading, 
       subtitle={subtitle}
       footer={model ? (
         <Footer>
+          {extraFooter}
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Button testID="share-pdf" title="Share PDF" icon="document-outline" loading={busy === 'pdf'} disabled={!!busy && busy !== 'pdf'}
               onPress={() => run('pdf')} style={{ flex: 1 }} />

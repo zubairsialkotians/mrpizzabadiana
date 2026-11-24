@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Switch, KeyboardAvoidingView } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Screen, Field, Button, Loading, ErrorBox, Empty, Fab, Badge, s } from '../components/ui';
 import { ProductImage } from '../components/shop';
@@ -63,7 +63,7 @@ function CategoryModal({ cat, onClose }) {
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={() => onClose(false)}>
-      <View style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
+      <KeyboardAvoidingView behavior="padding" style={[s.modalBack, { justifyContent: 'center', padding: 24 }]}>
         <View style={[s.card, { padding: 18 }]}>
           <Text style={[s.sheetTitle, { marginBottom: 12 }]}>{cat.id ? 'Edit category' : 'New category'}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -81,7 +81,7 @@ function CategoryModal({ cat, onClose }) {
             <Button testID="cat-save" title="Save" onPress={save} loading={busy} disabled={!name.trim()} style={{ flex: 1 }} />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
