@@ -8,20 +8,20 @@ import { api } from '../services/api';
 import { money, niceDate, rangeFor } from '../services/format';
 
 const TABS = [
+  { value: '', label: 'All' },
   { value: 'pending', label: 'New' },
   { value: 'active', label: 'In progress' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
-  { value: '', label: 'All' },
 ];
 
 // Cashier's home too: the orders they took, with "New order"
 export default function AdminOrdersScreen({ navigation, route }) {
   const { isOwner, isCashier } = useAuth();
   const tabs = isCashier ? TABS.filter((t) => t.value !== 'pending') : TABS;
-  // Cashier: everything they took, by default
-  const [status, setStatus] = useState(route.params?.status ?? (isCashier ? '' : 'pending'));
+  // All orders by default (the home screen's New / In progress shortcuts open those tabs)
+  const [status, setStatus] = useState(route.params?.status ?? '');
   const [takenBy, setTakenBy] = useState('');
   const [branchId, setBranchId] = useState(0);
   const [range, setRange] = useState(rangeFor('all'));

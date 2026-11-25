@@ -6,6 +6,7 @@ import { ProductCard, ProductImage } from './shop';
 import { usePaged, useLoad } from './useData';
 import { api } from '../services/api';
 import { useCatalogueStatus } from './MenuSync';
+import { catTree, mainOf, SubCategoryChips } from './CategoryFilter';
 import { colors } from '../theme';
 
 /*
@@ -35,20 +36,23 @@ export function Catalogue({ width, header, onProductPress, onSizes, onRefresh, b
   const gap = 12;
   const cardW = (gridW - pad * 2 - gap * (cols - 1)) / cols;
   const showCategory = (id) => { setSearch(''); setQ(''); setCategory(id); };
+  // Main categories in the picture row; the chosen one's sub-categories as chips under it
+  const mains = catTree(cats.data || []);
+  const activeMain = mainOf(cats.data || [], category);
 
   const top = (
     <View>
       {header?.({ showCategory, contentWidth: gridW - pad * 2 })}
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search products" />
-      {(cats.data || []).length > 0 && (
+      {mains.length > 0 && (
         <FlatList
           horizontal
-          data={[{ id: 0, name: 'All' }, ...cats.data]}
+          data={[{ id: 0, name: 'All' }, ...mains]}
           keyExtractor={(c) => String(c.id)}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 10, paddingBottom: 12 }}
           renderItem={({ item: c }) => {
-            const active = category === c.id;
+            const active = activeMain === c.id;
             return (
               <TouchableOpacity style={st.cat} onPress={() => setCategory(c.id)} testID={`cat-${c.id}`}>
                 <View style={[st.catImgWrap, catStyle.wrap, active && { borderColor: catStyle.active || colors.primary }]}>
@@ -62,6 +66,7 @@ export function Catalogue({ width, header, onProductPress, onSizes, onRefresh, b
           }}
         />
       )}
+      <SubCategoryChips cats={cats.data || []} value={category} onChange={setCategory} />
       {!!q && <Text style={{ color: colors.muted, marginBottom: 8 }}>Results for “{q}”</Text>}
     </View>
   );

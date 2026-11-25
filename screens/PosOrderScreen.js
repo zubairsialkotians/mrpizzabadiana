@@ -10,6 +10,7 @@ import { useCart, useLineStore, LinesScope, lineName } from '../components/CartC
 import { Catalogue } from '../components/Catalogue';
 import { CartPanel, SizePicker, SPLIT_MIN_WIDTH, panelWidth } from '../components/CartPanel';
 import { api } from '../services/api';
+import { CategoryChips } from '../components/CategoryFilter';
 import { money, qtyLabel } from '../services/format';
 import { nextQty, prevQty, minOf, round2, deliveryFee } from '../services/qty';
 import { usePrintBill } from '../components/PrintBill';
@@ -190,9 +191,10 @@ export default function PosOrderScreen({ navigation, route }) {
         </>
       )}
 
-      <AdjustField title="Discount" k="discount" f={f} set={set} a={disc} hint="Taken off the order total (items + delivery)" />
       <AdjustField title="Tax" k="tax" f={f} set={set} a={tax} hint="Added on the total after the discount" />
       <AdjustField title="Service charge" k="service" f={f} set={set} a={service} hint="Added on the total after the discount" />
+      {/* Last, just above the total: the discount still comes off items + delivery before tax / service charge */}
+      <AdjustField title="Discount" k="discount" f={f} set={set} a={disc} hint="Taken off the order total (items + delivery)" />
 
       <Card>
         <KV label="Items" value={money(subtotal)} />
@@ -307,12 +309,7 @@ function ProductPicker({ visible, onClose, onAdd, lines }) {
             <TouchableOpacity onPress={onClose} hitSlop={10}><Text style={{ color: colors.primary, fontWeight: '800', fontSize: 16 }}>Done</Text></TouchableOpacity>
           </View>
           <SearchBar value={search} onChangeText={setSearch} placeholder="Search items" />
-          {cats.length > 1 && (
-            <ChipRow>
-              <Chip label="All" active={!cat} onPress={() => setCat(0)} />
-              {cats.map((c) => <Chip key={c.id} label={c.name} active={cat === c.id} onPress={() => setCat(c.id)} />)}
-            </ChipRow>
-          )}
+          {cats.length > 1 && <CategoryChips cats={cats} value={cat} onChange={setCat} />}
           {error ? <Text style={{ color: colors.danger, padding: 12 }}>{error}</Text> : !products ? <ActivityIndicator color={colors.primary} style={{ margin: 24 }} /> : (
             <FlatList
               data={products}

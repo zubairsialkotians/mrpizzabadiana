@@ -38,6 +38,8 @@ module.exports = {
       'expo-system-ui',
       // Product photos and shop logo (staff)
       ['expo-image-picker', { photosPermission: 'Choose a payment screenshot, or photos for your products and shop logo.', cameraPermission: 'Take photos of your products.', microphonePermission: false }],
+      // Location while the app is open only: customer's spot sent with the order, shop location in settings
+      ['expo-location', { locationWhenInUsePermission: "Share your location with your order so the shop can find you and tell how far you are.", isAndroidBackgroundLocationEnabled: false, isIosBackgroundLocationEnabled: false }],
       // Embedded icon font so icons never depend on runtime font loading
       ['expo-font', { fonts: ['./assets/fonts/ionicons.ttf'] }],
       './plugins/withNoForceDark',

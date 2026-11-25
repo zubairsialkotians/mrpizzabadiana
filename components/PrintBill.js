@@ -3,7 +3,7 @@ import { View, Text, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Card, Button, Segmented, s } from './ui';
 import { useAuth } from './AuthContext';
-import { getPrinter, savePrinter, printBill, openRawbtStore, PAPERS, paperLabel } from '../services/printer';
+import { getPrinter, savePrinter, printBill, openRawbtStore, PAPERS, paperLabel, PRINT_WIDTHS, printWidth, PRINT_COLS, printCols } from '../services/printer';
 import { colors } from '../theme';
 
 // print(order): prints the bill on this device's printer, with a clear message when it can't
@@ -83,6 +83,24 @@ export function PrinterCard() {
       <Text style={[s.itemMeta, { marginTop: 6 }]}>
         {paper === 'a4' ? 'The full bill with your logo, same as the Bill screen. For normal office printers.' : `A receipt sized for a ${paper} mm thermal roll.`}
       </Text>
+      {paper !== 'a4' && !rawbt && (
+        <>
+          <Text style={{ fontWeight: '800', color: colors.text, marginTop: 14, marginBottom: 8 }}>Print width</Text>
+          <Segmented value={printWidth({ ...cfg, paper })} onChange={(v) => update({ width: v })}
+            options={PRINT_WIDTHS[paper].map((w, i) => ({ value: w, label: `${w} mm${i === 0 ? ' (usual)' : ''}` }))} />
+          <Text style={[s.itemMeta, { marginTop: 6 }]}>
+            {`Receipt printers can't print to the edge of the roll. If the bill is cut on the right, choose a smaller width; if there is empty space on the right, choose a bigger one. Print a test bill to check.`}
+          </Text>
+        </>
+      )}
+      {paper !== 'a4' && rawbt && (
+        <>
+          <Text style={{ fontWeight: '800', color: colors.text, marginTop: 14, marginBottom: 8 }}>Characters per line</Text>
+          <Segmented value={printCols({ ...cfg, paper })} onChange={(v) => update({ cols: v })}
+            options={PRINT_COLS[paper].map((c, i) => ({ value: c, label: `${c}${i === 0 ? ' (usual)' : ''}` }))} />
+          <Text style={[s.itemMeta, { marginTop: 6 }]}>If the bill is cut on the right, choose the smaller number. Print a test bill to check.</Text>
+        </>
+      )}
       <Text style={{ fontWeight: '800', color: colors.text, marginTop: 14, marginBottom: 8 }}>Copies</Text>
       <Segmented value={cfg.copies} onChange={(v) => update({ copies: v })} options={[1, 2, 3].map((n) => ({ value: n, label: String(n) }))} />
       <View style={{ marginTop: 14 }}>

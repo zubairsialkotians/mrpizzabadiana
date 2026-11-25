@@ -6,6 +6,7 @@ import { Screen, Field, Button, Footer, SelectField, SectionTitle, Card, Chip, B
 import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
+import { catOptions } from '../components/CategoryFilter';
 import { pickAndUpload } from '../services/images';
 import { qtyLabel } from '../services/format';
 import { colors } from '../theme';
@@ -143,7 +144,7 @@ export default function ItemFormScreen({ navigation, route }) {
 
       <Field label="Name" value={f.name} onChangeText={set('name')} placeholder="e.g. Basmati Rice" testID="item-name" />
       <SelectField label="Category" value={f.category_id} onChange={set('category_id')} placeholder="Choose category"
-        options={[{ value: 0, label: 'No category' }, ...(cats.data || []).map((c) => ({ value: c.id, label: c.name }))]} />
+        options={[{ value: 0, label: 'No category' }, ...catOptions(cats.data || [])]} />
       <Card>
         <Row label="Fast food item (sizes)" value={sized} onChange={turnSized} hint="e.g. pizza, burger, shake: S, M, L… each with its own price" />
       </Card>

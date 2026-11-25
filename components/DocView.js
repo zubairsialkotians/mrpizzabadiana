@@ -26,7 +26,7 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
         <View style={{ alignItems: 'flex-end', maxWidth: '48%' }}>
           <Text style={st.title}>{m.title}</Text>
           {m.meta.map(([k, v]) => (
-            <Text key={k} style={st.metaRow}><Text style={st.muted}>{k}  </Text><Text style={{ fontWeight: '700' }}>{v}</Text></Text>
+            <Text key={k} style={st.metaRow}><Text style={st.muted}>{k}  </Text><Text style={{ fontWeight: '500' }}>{v}</Text></Text>
           ))}
           {!!m.stamp && <Text style={st.stamp}>{m.stamp}</Text>}
         </View>
@@ -66,7 +66,7 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
                 const obj = typeof cell === 'object' && cell;
                 return (
                   <View key={i} style={{ flex: align.flex }}>
-                    <Text style={[st.td, { textAlign: align.textAlign }, r.bold && { fontWeight: '700' }]}>{obj ? obj.text : cell}</Text>
+                    <Text style={[st.td, { textAlign: align.textAlign }, r.bold && { fontWeight: '500' }]}>{obj ? obj.text : cell}</Text>
                     {!!obj?.sub && <Text style={[st.cellSub, { textAlign: align.textAlign }]}>{obj.sub}</Text>}
                   </View>
                 );
@@ -75,8 +75,8 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
           ))}
           {b.foot && (
             <View style={[st.tr, st.foot]}>
-              <Text style={[st.td, { flex: 1, fontWeight: '800' }]}>{b.foot[0]}</Text>
-              <Text style={[st.td, { fontWeight: '800' }]}>{b.foot[1]}</Text>
+              <Text style={[st.td, { flex: 1, fontWeight: '600' }]}>{b.foot[0]}</Text>
+              <Text style={[st.td, { fontWeight: '600' }]}>{b.foot[1]}</Text>
             </View>
           )}
         </View>
@@ -86,8 +86,8 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
         <View style={st.totals}>
           {m.totals.map((t, i) => (
             <View key={i} style={[st.totRow, t.big && st.totBig, t.divider && st.totDiv]}>
-              <Text style={[st.totText, t.bold && { fontWeight: '800' }, t.big && { fontSize: 15 }]}>{t.label}</Text>
-              <Text style={[st.totText, t.bold && { fontWeight: '800' }, t.big && { fontSize: 15 }, tone(t.tone)]}>{t.value}</Text>
+              <Text style={[st.totText, t.bold && { fontWeight: '600' }, t.big && { fontSize: 15 }]}>{t.label}</Text>
+              <Text style={[st.totText, t.bold && { fontWeight: '600' }, t.big && { fontSize: 15 }, tone(t.tone)]}>{t.value}</Text>
             </View>
           ))}
         </View>
@@ -101,7 +101,7 @@ const DocView = forwardRef(function DocView({ model: m, width }, ref) {
         <View style={st.footer}>
           {!!c.bill_caption && <Text style={st.caption}>{c.bill_caption}</Text>}
           {!!c.support_phone && (
-            <Text style={[st.muted, { textAlign: 'center' }]}>For support call: <Text style={{ fontWeight: '800', color: colors.text }}>{c.support_phone}</Text></Text>
+            <Text style={[st.muted, { textAlign: 'center' }]}>For support call: <Text style={{ fontWeight: '600', color: colors.text }}>{c.support_phone}</Text></Text>
           )}
         </View>
       )}
@@ -123,7 +123,7 @@ function BillQr({ url, label, size = 116 }) {
           <View key={`${r}-${c}`} style={{ position: 'absolute', top: (r + 2) * cell, left: (c + 2) * cell, width: len * cell + 0.4, height: cell + 0.4, backgroundColor: '#000' }} />
         )))}
       </View>
-      {!!label && <Text style={{ fontWeight: '800', color: colors.text, marginTop: 4, fontSize: 13 }}>{label}</Text>}
+      {!!label && <Text style={{ fontWeight: '600', color: colors.text, marginTop: 4, fontSize: 13 }}>{label}</Text>}
     </View>
   );
 }
@@ -135,21 +135,21 @@ const st = StyleSheet.create({
   top: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, borderBottomWidth: 2, borderBottomColor: colors.primary, paddingBottom: 10 },
   co: { flexDirection: 'row', gap: 8, alignItems: 'center', flexShrink: 1 },
   logo: { width: 52, height: 52 },
-  name: { fontSize: 16, fontWeight: '800', color: colors.black },
+  name: { fontSize: 16, fontWeight: '600', color: colors.black },
   muted: { color: colors.muted, fontSize: 12 },
-  title: { fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
+  title: { fontSize: 18, fontWeight: '600', color: colors.primary, letterSpacing: 1 },
   metaRow: { fontSize: 11, color: colors.text, textAlign: 'right' },
-  stamp: { marginTop: 4, color: colors.danger, borderWidth: 2, borderColor: colors.danger, paddingHorizontal: 6, fontWeight: '800', letterSpacing: 2 },
-  partyHead: { fontSize: 10, fontWeight: '700', color: colors.muted, textTransform: 'uppercase' },
-  partyName: { fontSize: 15, fontWeight: '800', color: colors.text },
+  stamp: { marginTop: 4, color: colors.danger, borderWidth: 2, borderColor: colors.danger, paddingHorizontal: 6, fontWeight: '600', letterSpacing: 2 },
+  partyHead: { fontSize: 10, fontWeight: '500', color: colors.muted, textTransform: 'uppercase' },
+  partyName: { fontSize: 15, fontWeight: '600', color: colors.text },
   summary: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   sumBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
   sumLabel: { fontSize: 10, color: colors.muted },
-  sumValue: { fontSize: 13, fontWeight: '800', color: colors.text },
-  blockHead: { fontSize: 13, fontWeight: '800', color: colors.text },
+  sumValue: { fontSize: 13, fontWeight: '600', color: colors.text },
+  blockHead: { fontSize: 13, fontWeight: '600', color: colors.text },
   tr: { flexDirection: 'row', gap: 4, paddingVertical: 5, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
   th: { backgroundColor: colors.primarySoft, borderBottomWidth: 0 },
-  thText: { fontSize: 10, fontWeight: '800', color: colors.primaryDark },
+  thText: { fontSize: 10, fontWeight: '600', color: colors.primaryDark },
   td: { fontSize: 11, color: colors.text },
   cellSub: { fontSize: 9, color: colors.muted },
   foot: { backgroundColor: colors.background, borderBottomWidth: 0 },

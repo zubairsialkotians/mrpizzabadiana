@@ -116,7 +116,11 @@ export function localCategories(d) {
 export function localProducts(d, p = {}) {
   let list = d.products;
   const cat = Number(p.category_id) || 0;
-  if (cat) list = list.filter((x) => x.category_id === cat);
+  if (cat) {
+    // A main category also shows the items of its sub-categories
+    const ids = new Set([cat, ...d.categories.filter((c) => c.parent_id === cat).map((c) => c.id)]);
+    list = list.filter((x) => ids.has(x.category_id));
+  }
   if (p.featured) list = list.filter((x) => x.featured);
   const q = String(p.search || '').trim().toLowerCase();
   if (q) list = list.filter((x) => x.name.toLowerCase().includes(q));
@@ -134,5 +138,6 @@ export function localProduct(d, id) {
   const x = d.products.find((p) => p.id === Number(id));
   if (!x) return null;
   const cat = d.categories.find((c) => c.id === x.category_id);
-  return { success: true, product: { ...x, category_name: cat?.name || '' } };
+  const main = cat?.parent_id ? d.categories.find((c) => c.id === cat.parent_id) : null;
+  return { success: true, product: { ...x, category_name: cat ? (main ? `${main.name} › ${cat.name}` : cat.name) : '' } };
 }

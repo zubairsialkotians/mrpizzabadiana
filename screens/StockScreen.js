@@ -10,6 +10,7 @@ import { ProductImage } from '../components/shop';
 import { usePaged, useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
+import { CategoryChips } from '../components/CategoryFilter';
 import { money, qtyLabel } from '../services/format';
 import { colors } from '../theme';
 
@@ -36,11 +37,8 @@ export default function StockScreen({ navigation, route }) {
       >
         <View style={{ marginBottom: 10, alignItems: 'flex-start' }}><BranchFilter value={branchId} onChange={setBranchId} /></View>
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search item" />
-        <ChipRow>
-          <Chip icon="alert-circle-outline" label="Low stock" active={low} onPress={() => setLow(!low)} />
-          <Chip label="All categories" active={!cat} onPress={() => setCat(0)} />
-          {(cats.data || []).map((c) => <Chip key={c.id} label={c.name} active={cat === c.id} onPress={() => setCat(c.id)} />)}
-        </ChipRow>
+        <CategoryChips cats={cats.data || []} value={cat} onChange={setCat} allLabel="All categories"
+          before={<Chip icon="alert-circle-outline" label="Low stock" active={low} onPress={() => setLow(!low)} />} />
 
         {p.loading ? <Loading /> : p.error ? <ErrorBox message={p.error} onRetry={p.reload} /> : (
           <>

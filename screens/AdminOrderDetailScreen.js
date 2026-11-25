@@ -9,6 +9,8 @@ import { useTeamActions } from '../components/team';
 import { PrintBillButton } from '../components/PrintBill';
 import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
+import { LocationMap } from '../components/LocationMap';
+import { kmLabel } from '../services/location';
 import { api } from '../services/api';
 import { confirmAction } from '../services/confirm';
 import { money, niceDate, STATUS_LABELS } from '../services/format';
@@ -120,8 +122,14 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
           <Button small variant="ghost" icon="share-social-outline" title="Bill" onPress={() => navigation.navigate('Bill', { id: o.id })} style={{ flex: 1 }} />
         </View>
         {/* Always here, whatever the order's status (Shop settings decide whether bills also print by themselves) */}
-        <PrintBillButton order={o} style={{ marginTop: 8 }} />
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+          <PrintBillButton order={o} style={{ flex: 1 }} />
+          {/* Next customer: back to the shop to take a new order (same as "New order" on the Orders page) */}
+          <Button testID="order-new" variant="outline" icon="add-circle-outline" title="New order" onPress={() => navigation.navigate('Home')} style={{ flex: 1 }} />
+        </View>
       </Card>
+
+      <CustomerLocation o={o} />
 
       {isOwner && o.status === 'pending' && branches.length > 1 && (
         <SelectField
@@ -199,5 +207,36 @@ export default function AdminOrderDetailScreen({ navigation, route }) {
         </KeyboardAvoidingView>
       </Modal>
     </Screen>
+  );
+}
+
+// Where the customer was when they ordered (sent by their phone at checkout)
+function CustomerLocation({ o }) {
+  const l = o.location;
+  if (!l) {
+    // Staff orders never have one; say so only on customers' orders
+    return o.created_by ? null : <Text style={[s.itemMeta, { marginBottom: 14 }]}>The customer did not share their location.</Text>;
+  }
+  const open = () => Linking.openURL(l.maps_url);
+  return (
+    <>
+      <SectionTitle>Customer location</SectionTitle>
+      <Card style={{ gap: 10 }}>
+        <LocationMap lat={l.lat} lng={l.lng} image={l.map_image || undefined} onPress={open} />
+        {l.out_of_range && (
+          <Text style={{ color: colors.danger, fontWeight: '800' }} testID="order-far">
+            Outside delivery range: {kmLabel(l.distance_km)} away (range {kmLabel(l.range_km)})
+          </Text>
+        )}
+        <Text style={s.itemMeta}>
+          {l.distance_km != null && !l.out_of_range ? `${kmLabel(l.distance_km)} from the shop${l.range_km ? ` · within ${kmLabel(l.range_km)} range` : ''} · ` : ''}
+          {l.lat}, {l.lng}{l.accuracy ? ` · accurate to about ${l.accuracy} m` : ''}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button small icon="map-outline" title="Open in Google Maps" onPress={open} style={{ flex: 1 }} testID="order-map" />
+          <Button small variant="ghost" icon="navigate-outline" title="Directions" onPress={() => Linking.openURL(l.directions_url)} style={{ flex: 1 }} />
+        </View>
+      </Card>
+    </>
   );
 }

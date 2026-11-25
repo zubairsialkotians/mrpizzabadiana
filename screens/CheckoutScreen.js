@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -11,6 +11,7 @@ import { money, qtyLabel } from '../services/format';
 import { deliveryFee, shopCharges, round2 } from '../services/qty';
 import { pickImage } from '../services/images';
 import { PAY_TYPES, AccountBox, cashLabel } from '../components/payments';
+import { currentLocation, distanceKm, kmLabel, shopPoint, openLocationSettings } from '../services/location';
 import { SHOP_KEY } from '../config';
 import { colors } from '../theme';
 
@@ -34,6 +35,23 @@ export default function CheckoutScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const set = (k) => (v) => { setForm({ ...form, [k]: v }); setErrors({ ...errors, [k]: '' }); };
 
+  // Customer's location, sent with the order (optional). Asked when checkout opens so a customer outside
+  // the shop's delivery range sees the warning before ordering; they can still order.
+  const [loc, setLoc] = useState({ status: 'loading' });
+  const locate = async (ask = true) => {
+    setLoc({ status: 'loading' });
+    const r = await currentLocation({ ask });
+    setLoc(r);
+    return r;
+  };
+  useEffect(() => { locate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const shopAt = shopPoint(shop);
+  const range = Number(shop?.delivery_range_km) || 0;
+  const away = loc.status === 'ok' && shopAt ? distanceKm(shopAt, loc) : null;
+  const outOfRange = fulfilment === 'delivery' && range > 0 && away != null && away > range;
+  const farText = outOfRange && (shop?.out_of_range_message?.trim()
+    || `You are about ${kmLabel(away)} away. We deliver within ${kmLabel(range)}, so your order may not be accepted or may take longer.`);
+
   const fee = deliveryFee(shop, cart.subtotal, fulfilment);
   const charges = shopCharges(shop, cart.subtotal, fee);
   const total = charges.total;
@@ -49,8 +67,11 @@ export default function CheckoutScreen({ navigation }) {
 
     setBusy(true);
     try {
+      // Still finding it (or it failed): one more quick try, without asking again
+      const at = loc.status === 'ok' ? loc : loc.status === 'denied' || loc.status === 'unavailable' ? null : await currentLocation({ ask: false, timeout: 6000 });
+      const here = at?.status === 'ok' ? { lat: at.lat, lng: at.lng, accuracy: at.accuracy } : {};
       const r = await api.placeOrder({
-        ...form, fulfilment,
+        ...form, fulfilment, ...here,
         payment_method: payAcc ? payAcc.key : 'cod',
         payment_proof: payAcc && proof ? proof.base64 : undefined,
         items: cart.lines.map((l) => ({ item_id: l.item_id, qty: l.qty, size: l.size || '' })),
@@ -101,12 +122,24 @@ export default function CheckoutScreen({ navigation }) {
           options={[{ value: 'delivery', label: 'Home delivery' }, { value: 'pickup', label: 'Pick up from shop' }]} />
       )}
 
+      {outOfRange && (
+        <Card style={{ backgroundColor: colors.warningSoft, borderColor: 'transparent', flexDirection: 'row', gap: 10 }} testID="co-far">
+          <Ionicons name="warning-outline" size={22} color={colors.warning} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '800', color: colors.text }}>You're outside our delivery area</Text>
+            <Text style={[s.itemSub, { color: colors.text, marginTop: 2 }]}>{farText}</Text>
+            <Text style={[s.itemMeta, { marginTop: 4 }]}>You can still place the order.</Text>
+          </View>
+        </Card>
+      )}
+
       <SectionTitle>Your details</SectionTitle>
       <Field label="Full name" value={form.name} onChangeText={set('name')} error={errors.name} testID="co-name" />
       <Field label="Phone number" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={errors.phone} testID="co-phone" />
       <Field label="Email" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" error={errors.email} testID="co-email" />
       <Field label={fulfilment === 'delivery' ? 'Delivery address' : 'Address (optional)'} value={form.address} onChangeText={set('address')}
         multiline error={errors.address} placeholder="House, street, area, city" testID="co-address" />
+      <LocationRow loc={loc} away={away} onRetry={() => locate(true)} />
       <Field label="Note for the shop (optional)" value={form.note} onChangeText={set('note')} placeholder="e.g. call before coming" />
       {fulfilment === 'pickup' && !!shop?.address && <Text style={[s.itemMeta, { marginTop: -6, marginBottom: 12 }]}>Pick up from: {shop.address}</Text>}
 
@@ -172,5 +205,27 @@ export default function CheckoutScreen({ navigation }) {
         </Text>
       )}
     </Screen>
+  );
+}
+
+// Where the phone is: sent with the order so the shop can find the customer
+function LocationRow({ loc, away, onRetry }) {
+  const ok = loc.status === 'ok';
+  const icon = ok ? 'location' : loc.status === 'loading' ? 'locate-outline' : 'location-outline';
+  return (
+    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }} testID="co-location">
+      <Ionicons name={icon} size={22} color={ok ? colors.success : colors.muted} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontWeight: '700', color: colors.text }}>
+          {ok ? 'Your location will be sent with the order' : loc.status === 'loading' ? 'Finding your location…' : 'Location not shared'}
+        </Text>
+        <Text style={s.itemMeta}>
+          {ok ? (away != null ? `About ${kmLabel(away)} from the shop` : 'Helps the shop find you')
+            : loc.status === 'loading' ? 'Helps the shop find you' : `${loc.message || ''} Optional, it helps the shop find you.`}
+        </Text>
+      </View>
+      {loc.status === 'denied' ? <Button small variant="ghost" title="Settings" onPress={openLocationSettings} />
+        : !ok && loc.status !== 'loading' && loc.status !== 'unavailable' ? <Button small variant="ghost" title="Try again" onPress={onRetry} /> : null}
+    </Card>
   );
 }

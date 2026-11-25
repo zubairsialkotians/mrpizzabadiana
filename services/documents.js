@@ -113,33 +113,33 @@ export function docHtml(m, logoSrc) {
   .co { display: flex; gap: 12px; align-items: center; min-width: 0; flex: 1; }
   .right { flex-shrink: 0; }
   .co img { width: 64px; height: 64px; object-fit: contain; }
-  .name { font-size: 20px; font-weight: 800; color: #0b1020; }
+  .name { font-size: 20px; font-weight: 600; color: #0b1020; }
   .muted { color: #64748b; }
-  .title { font-size: 22px; font-weight: 800; color: #1d4ed8; text-align: right; letter-spacing: 1px; }
+  .title { font-size: 22px; font-weight: 600; color: #1d4ed8; text-align: right; letter-spacing: 1px; }
   .meta { margin-top: 4px; border-collapse: collapse; margin-left: auto; }
   .meta td { padding: 1px 0 1px 10px; text-align: right; white-space: nowrap; border: none; }
   .meta td:first-child { color: #64748b; }
-  .stamp { color: #c0392b; border: 2px solid #c0392b; display: inline-block; padding: 2px 10px; font-weight: 800; margin-top: 6px; letter-spacing: 2px; }
+  .stamp { color: #c0392b; border: 2px solid #c0392b; display: inline-block; padding: 2px 10px; font-weight: 600; margin-top: 6px; letter-spacing: 2px; }
   .party { margin: 12px 0; }
-  .party .h { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: .5px; }
-  .party .l1 { font-size: 15px; font-weight: 800; }
+  .party .h { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 500; letter-spacing: .5px; }
+  .party .l1 { font-size: 15px; font-weight: 600; }
   .summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
   .summary div { border: 1px solid #e2e7f0; border-radius: 6px; padding: 6px 10px; }
   .summary b { display: block; font-size: 14px; }
   .summary span { font-size: 10px; color: #64748b; }
   .block { margin-top: 12px; page-break-inside: avoid; }
-  .bh { font-weight: 800; font-size: 13px; }
+  .bh { font-weight: 600; font-size: 13px; }
   .bs { color: #64748b; font-size: 11px; margin-bottom: 4px; }
   table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .grid th { background: #e8eefc; color: #1e3a8a; font-size: 11px; text-align: left; padding: 6px; }
   .grid td { padding: 6px; border-bottom: 1px solid #e2e7f0; vertical-align: top; word-wrap: break-word; }
   .grid .r { text-align: right; }
   .sub { color: #64748b; font-size: 10px; }
-  .grid tr.foot td { font-weight: 800; border-bottom: none; background: #f3f5f9; }
+  .grid tr.foot td { font-weight: 600; border-bottom: none; background: #f3f5f9; }
   .totals { margin: 12px 0 0 auto; width: 60%; border-collapse: collapse; }
   .totals td { border: none; padding: 3px 6px; }
   .totals td:last-child { text-align: right; white-space: nowrap; }
-  .totals tr.b td { font-weight: 800; }
+  .totals tr.b td { font-weight: 600; }
   .totals tr.big td { font-size: 15px; border-top: 1px solid #111827; padding-top: 6px; }
   .totals tr.div td { border-top: 1px dashed #94a3b8; padding-top: 6px; }
   .good { color: #15803d; } .bad { color: #c0392b; }
@@ -149,7 +149,7 @@ export function docHtml(m, logoSrc) {
   .caption { font-style: italic; white-space: pre-line; }
   .qr { text-align: center; margin-top: 14px; page-break-inside: avoid; }
   .qr svg { display: block; margin: 0 auto; }
-  .qr .ql { font-weight: 800; font-size: 13px; margin-top: 4px; }
+  .qr .ql { font-weight: 600; font-size: 13px; margin-top: 4px; }
 </style></head><body>
 <div class="top">
   <div class="co">${logoSrc ? `<img src="${esc(logoSrc)}">` : ''}<div>

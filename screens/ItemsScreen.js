@@ -4,6 +4,7 @@ import { Screen, SearchBar, ChipRow, Chip, Loading, ErrorBox, Empty, LoadMore, F
 import { ProductImage } from '../components/shop';
 import { usePaged, useLoad } from '../components/useData';
 import { api } from '../services/api';
+import { CategoryChips } from '../components/CategoryFilter';
 import { money, perUnit, qtyLabel } from '../services/format';
 import { colors } from '../theme';
 
@@ -23,10 +24,7 @@ export default function ItemsScreen({ navigation }) {
         <Button testID="items-purchases" small variant="outline" icon="list-outline" title="Purchases" onPress={() => navigation.navigate('Purchases')} style={{ flex: 1 }} />
       </View>
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search items" />
-      <ChipRow>
-        <Chip label="All" active={!cat} onPress={() => setCat(0)} />
-        {(cats.data || []).map((c) => <Chip key={c.id} label={c.name} active={cat === c.id} onPress={() => setCat(c.id)} />)}
-      </ChipRow>
+      <CategoryChips cats={cats.data || []} value={cat} onChange={setCat} />
       {p.loading ? <Loading /> : p.error ? <ErrorBox message={p.error} onRetry={p.reload} /> : !p.items.length ? (
         <Empty icon="pricetags-outline" text="No items yet. Tap + to add your first product." />
       ) : p.items.map((it) => (

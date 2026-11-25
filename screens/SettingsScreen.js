@@ -7,6 +7,8 @@ import { useLoad } from '../components/useData';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { pickAndUpload } from '../services/images';
+import { currentLocation, parseLatLng, locationAvailable } from '../services/location';
+import { LocationMap } from '../components/LocationMap';
 import { colors } from '../theme';
 
 // Owner: what customers see (logo, contact, notice), delivery rules, open/closed, bill caption
@@ -15,6 +17,7 @@ export default function SettingsScreen({ navigation }) {
   const { data, loading, error, reload } = useLoad(() => api.settings().then((r) => r.settings));
   const [f, setF] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [locating, setLocating] = useState(false);
   useEffect(() => {
     if (data && !f) {
       setF({
@@ -26,6 +29,8 @@ export default function SettingsScreen({ navigation }) {
         tax_type: data.tax_type || '', tax_value: data.tax_value ? String(data.tax_value) : '',
         bill_print: data.bill_print === 'manual' ? 'manual' : 'auto',
         qr_url: data.qr_url || '', qr_label: data.qr_label || '',
+        shop_loc: data.shop_lat != null && data.shop_lng != null ? `${data.shop_lat}, ${data.shop_lng}` : '',
+        delivery_range_km: data.delivery_range_km ? String(data.delivery_range_km) : '', out_of_range_message: data.out_of_range_message || '',
         service_type: data.service_type || '', service_value: data.service_value ? String(data.service_value) : '',
       });
     }
@@ -51,13 +56,29 @@ export default function SettingsScreen({ navigation }) {
     type, name: !a.name || a.name === PAY_TYPES[a.type]?.label ? PAY_TYPES[type].label : a.name,
   });
 
+  // Owner standing in the shop: use the phone's location
+  const useHere = async () => {
+    setLocating(true);
+    const r = await currentLocation();
+    setLocating(false);
+    if (r.status !== 'ok') { Toast.show({ type: 'error', text1: 'Could not get the location', text2: r.message }); return; }
+    setF((x) => ({ ...x, shop_loc: `${r.lat}, ${r.lng}` }));
+    Toast.show({ type: 'success', text1: 'Shop location set', text2: r.accuracy ? `Accurate to about ${r.accuracy} m. Save to keep it.` : 'Save to keep it.' });
+  };
+
   const save = async () => {
+    const at = parseLatLng(f.shop_loc);
+    if (f.shop_loc.trim() && !at) { Toast.show({ type: 'error', text1: 'Shop location not valid', text2: 'Use "Use my current location" or paste e.g. 32.4945, 74.5229' }); return; }
+    if (Number(f.delivery_range_km) > 0 && !at) { Toast.show({ type: 'error', text1: 'Set the shop location', text2: 'It is needed to check the delivery range.' }); return; }
     setBusy(true);
     try {
       const keys = ['phone', 'whatsapp', 'address', 'notice', 'delivery_fee', 'free_delivery_over', 'min_order', 'pickup', 'is_open', 'closed_message', 'order_prefix', 'bill_caption', 'logo_id',
         'about', 'email', 'hours', 'map_url', 'website', 'facebook', 'instagram', 'cod', 'pay_accounts',
-        'tax_type', 'tax_value', 'service_type', 'service_value', 'bill_print', 'qr_url', 'qr_label'];
-      const r = await api.saveSettings(Object.fromEntries(keys.map((k) => [k, typeof f[k] === 'boolean' ? (f[k] ? 1 : 0) : f[k]])));
+        'tax_type', 'tax_value', 'service_type', 'service_value', 'bill_print', 'qr_url', 'qr_label', 'delivery_range_km', 'out_of_range_message'];
+      const r = await api.saveSettings({
+        ...Object.fromEntries(keys.map((k) => [k, typeof f[k] === 'boolean' ? (f[k] ? 1 : 0) : f[k]])),
+        shop_lat: at ? at.lat : '', shop_lng: at ? at.lng : '',
+      });
       setShop(r.shop);
       Toast.show({ type: 'success', text1: r.message });
       navigation.goBack();
@@ -141,6 +162,30 @@ export default function SettingsScreen({ navigation }) {
       </View>
       <Field label="Minimum order amount" value={f.min_order} onChangeText={set('min_order')} keyboardType="decimal-pad" hint="0 = no minimum" />
       <Card><Toggle label="Allow pickup from shop" value={f.pickup} onChange={set('pickup')} hint="No delivery charge for pickup" /></Card>
+
+      <SectionTitle>Delivery area</SectionTitle>
+      <Text style={[s.itemMeta, { marginBottom: 10 }]}>
+        Customers share their location at checkout. If they are further from the shop than the range, they see a message, but they can still order. Their location shows on the order.
+      </Text>
+      <Card style={{ gap: 10 }}>
+        <Text style={{ fontWeight: '800', color: colors.text }}>Shop location</Text>
+        {(() => { const at = parseLatLng(f.shop_loc); return at ? <LocationMap lat={at.lat} lng={at.lng} height={150} /> : null; })()}
+        {locationAvailable() && (
+          <Button small variant="ghost" icon="locate-outline" title="Use my current location" onPress={useHere} loading={locating} testID="set-shop-here" />
+        )}
+        <Field label="Latitude, longitude" value={f.shop_loc} onChangeText={set('shop_loc')} autoCapitalize="none" autoCorrect={false}
+          placeholder="e.g. 32.4945, 74.5229" style={{ marginBottom: 0 }} testID="set-shop-loc"
+          error={f.shop_loc.trim() && !parseLatLng(f.shop_loc) ? 'Not a valid location' : undefined}
+          hint="Stand in the shop and tap the button, or paste from Google Maps (long-press the shop on the map, copy the numbers)" />
+        {!!f.shop_loc && <Button small variant="outline" title="Clear location" onPress={() => setF((x) => ({ ...x, shop_loc: '', delivery_range_km: '' }))} />}
+      </Card>
+      <Field label="Delivery range (km)" value={f.delivery_range_km} onChangeText={(v) => set('delivery_range_km')(v.replace(/[^0-9.]/g, ''))}
+        keyboardType="decimal-pad" placeholder="e.g. 10" hint="0 or empty = no limit" testID="set-range" />
+      {Number(f.delivery_range_km) > 0 && (
+        <Field label="Message for customers outside the range (optional)" value={f.out_of_range_message} onChangeText={set('out_of_range_message')}
+          multiline maxLength={255}
+          placeholder={`You are about 14 km away. We deliver within ${f.delivery_range_km} km, so your order may not be accepted or may take longer.`} />
+      )}
 
       <SectionTitle>Tax & service charge</SectionTitle>
       <Text style={[s.itemMeta, { marginBottom: 10 }]}>

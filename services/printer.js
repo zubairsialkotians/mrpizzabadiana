@@ -20,7 +20,22 @@ const KEY = 'printer_config';
 // 'a4': the full bill (same as the Bill screen / Share PDF); 58 / 80: receipt rolls
 export const PAPERS = ['a4', 80, 58];
 export const paperLabel = (p) => (p === 'a4' ? 'Full page (A4)' : `${p} mm roll`);
-export const DEFAULT_PRINTER = { method: 'system', paper: 'a4', copies: 1 };
+// Thermal printers can't print to the roll's edges: an 80 mm roll prints about 72 mm wide, a 58 mm roll about 48 mm.
+// Drawing the bill wider than that cuts it on the right. Some printers print a bit wider: 'width' (mm) on the
+// device's printer settings fine-tunes it (0 = the usual width for the roll).
+export const PRINT_WIDTHS = { 80: [72, 76, 80], 58: [48, 52, 58] };
+export const printWidth = (p) => {
+  if (p.paper === 'a4') return null;
+  const list = PRINT_WIDTHS[p.paper === 58 ? 58 : 80];
+  return list.includes(Number(p.width)) ? Number(p.width) : list[0];
+};
+// Bluetooth (RawBT) prints text: characters per line. Most 80 mm printers fit 48 (some only 42), 58 mm ones 32.
+export const PRINT_COLS = { 80: [48, 42], 58: [32, 30] };
+export const printCols = (p) => {
+  const list = PRINT_COLS[p.paper === 58 ? 58 : 80];
+  return list.includes(Number(p.cols)) ? Number(p.cols) : list[0];
+};
+export const DEFAULT_PRINTER = { method: 'system', paper: 'a4', copies: 1, width: 0, cols: 0 };
 const RAWBT_STORE = 'https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter';
 
 export async function getPrinter() {
@@ -41,9 +56,9 @@ export async function savePrinter(cfg) {
 export async function printBill(order, shop, cfg) {
   const p = cfg || await getPrinter();
   const copies = Math.min(3, Math.max(1, Number(p.copies) || 1));
-  if (Platform.OS === 'web') { await printOnWeb(order, shop, p.paper); return; }
+  if (Platform.OS === 'web') { await printOnWeb(order, shop, p.paper, printWidth(p), copies); return; }
   if (p.method === 'rawbt' && Platform.OS === 'android') {
-    const text = receiptText(order, shop, p.paper === 58 ? 32 : 48); // thermal rolls only (A4 → 80 mm)
+    const text = receiptText(order, shop, printCols(p)); // thermal rolls only (A4 → 80 mm)
     const data = `rawbt:base64,${toBase64(escpos(text, copies))}`;
     try {
       await Linking.openURL(data);
@@ -57,25 +72,37 @@ export async function printBill(order, shop, cfg) {
   // Phone print dialog: the same bill as the Bill screen (a picture of it, like "Share image"),
   // in a PDF exactly the paper's width, so the printer gets the bill and not a screen / web page
   const pt = (x) => Math.round((x * 72) / 25.4);
-  const pageW = p.paper === 'a4' ? 595 : pt(p.paper === 58 ? 58 : 80);
+  const pageW = p.paper === 'a4' ? 595 : pt(printWidth(p));
   const model = buildBill(order, shop);
   if (host) {
     // Rolls: draw it narrow like on a phone; A4: the full Bill screen width
     const shot = await host(model, p.paper === 'a4' ? 520 : p.paper === 58 ? 320 : 360);
-    const margin = p.paper === 'a4' ? 24 : 4;
+    const margin = p.paper === 'a4' ? 24 : 2;
     const imgW = pageW - margin * 2;
-    const pageH = Math.ceil((imgW * shot.height) / shot.width) + margin * 2;
+    const pageH = Math.max(Math.ceil((imgW * shot.height) / shot.width) + margin * 2, p.paper === 'a4' ? 842 : 0);
+    // Copies: the print screen doesn't take a number of copies from the app, so the PDF has one page per copy
+    const page = `<div class="pg"><img src="data:image/png;base64,${shot.base64}"></div>`;
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
       @page { margin: 0; } html, body { margin: 0; padding: 0; background: #fff; }
+      .pg { height: ${pageH}pt; overflow: hidden; page-break-after: always; break-after: page; }
+      .pg:last-child { page-break-after: auto; break-after: auto; }
       img { display: block; width: ${imgW}pt; margin: ${margin}pt; }
-    </style></head><body><img src="data:image/png;base64,${shot.base64}"></body></html>`;
-    const { uri } = await Print.printToFileAsync({ html, width: pageW, height: Math.max(pageH, p.paper === 'a4' ? 842 : 0) });
+    </style></head><body>${page.repeat(copies)}</body></html>`;
+    const { uri } = await Print.printToFileAsync({ html, width: pageW, height: pageH });
     await Print.printAsync({ uri });
     return;
   }
   // No picture possible (e.g. web): the bill as a document
-  const { uri } = await Print.printToFileAsync({ html: docHtml(model, await logoDataUri(model.company.logo_url)), width: 595, height: 842 });
+  const { uri } = await Print.printToFileAsync({ html: repeatBody(docHtml(model, await logoDataUri(model.company.logo_url)), copies), width: 595, height: 842 });
   await Print.printAsync({ uri });
+}
+
+// The bill's page body N times, each copy starting on a new page
+function repeatBody(html, copies) {
+  if (copies < 2) return html;
+  return html.replace(/<body([^>]*)>([\s\S]*)<\/body>/i, (all, attrs, body) => (
+    `<body${attrs}>${Array(copies).fill(body).join('<div style="page-break-after: always; break-after: page;"></div>')}</body>`
+  ));
 }
 
 // Set by components/PrintHost (mounted in App.js): (model, width) → { base64, width, height } picture of the bill
@@ -87,18 +114,18 @@ export function setPrintHost(fn) { host = fn; }
   with the bill; it lists the PC's printers (USB, network, Wi-Fi, Bluetooth set up in Windows / macOS)
   and "Save as PDF". Printed from a hidden frame, so pop-up blockers don't stop it.
 */
-function printOnWeb(order, shop, paper) {
+function printOnWeb(order, shop, paper, width, copies = 1) {
   return new Promise((resolve, reject) => {
     const doc = globalThis.document;
     if (!doc) { reject(new Error('Printing is not available here')); return; }
     const model = buildBill(order, shop);
-    // The same bill as the Bill screen; on rolls the page is the roll's width
-    const mm = paper === 58 ? 58 : 80;
+    // The same bill as the Bill screen; on rolls the page is the printer's printable width
+    const mm = width || 72;
     const page = paper === 'a4'
       ? '@page { size: A4; margin: 12mm; }'
-      // drawn 360 px wide (like on a phone), then scaled to the roll's printable width
-      : `@page { size: ${mm}mm auto; margin: 2mm; } body { width: 360px; zoom: ${(((mm - 4) * 96) / 25.4 / 360).toFixed(3)}; }`;
-    const html = docHtml(model, model.company.logo_url).replace('@page { margin: 28px; }', page);
+      // drawn 360 px wide (like on a phone), then scaled to the printable width
+      : `@page { size: ${mm}mm auto; margin: 0 1mm; } body { width: 360px; zoom: ${(((mm - 2) * 96) / 25.4 / 360).toFixed(3)}; }`;
+    const html = repeatBody(docHtml(model, model.company.logo_url).replace('@page { margin: 28px; }', page), copies);
     const frame = doc.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');
     Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0', visibility: 'hidden' });
@@ -274,7 +301,7 @@ export function receiptHtml(o, shop, paper = 80, given = null) {
   return `<!doctype html><html><head><meta charset="utf-8">
 <style>
   @page { margin: 0; }
-  html, body { width: ${paper}mm; }
+  html, body { width: ${PRINT_WIDTHS[paper === 58 ? 58 : 80][0]}mm; }
   body { padding: 5mm 3mm 0; box-sizing: border-box; }
   body { margin: 0; font-family: 'Courier New', monospace; font-size: ${paper === 58 ? 9 : 10.5}pt; color: #000; }
   div { white-space: pre; line-height: 1.25; }

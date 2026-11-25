@@ -4,6 +4,7 @@ import Toast from 'react-native-toast-message';
 import { Screen, Field, Button, Footer, Card, SectionTitle, SelectField, s } from '../components/ui';
 import { useLoad } from '../components/useData';
 import { api } from '../services/api';
+import { catOptions } from '../components/CategoryFilter';
 import { pickAndUpload } from '../services/images';
 import { confirmAction } from '../services/confirm';
 import { colors } from '../theme';
@@ -79,7 +80,7 @@ export default function BannerFormScreen({ navigation, route }) {
 
       <Field label="Caption (optional)" value={f.title} onChangeText={set('title')} maxLength={191} placeholder="e.g. 20% off on all fruits" testID="banner-title" />
       <SelectField label="When tapped, open" value={f.category_id} onChange={set('category_id')}
-        options={[{ value: 0, label: 'Nothing (just a picture)' }, ...(cats.data || []).map((c) => ({ value: c.id, label: c.name }))]} />
+        options={[{ value: 0, label: 'Nothing (just a picture)' }, ...catOptions(cats.data || [])]} />
       <Field label="Position" value={f.sort_order} onChangeText={(v) => set('sort_order')(v.replace(/[^0-9]/g, ''))} keyboardType="number-pad"
         hint="Lower numbers show first" maxLength={4} />
 
