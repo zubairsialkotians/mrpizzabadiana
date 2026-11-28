@@ -261,7 +261,7 @@ export default function ItemFormScreen({ navigation, route }) {
       </Card>
 
       <Card>
-        <Row label="Show in shop" value={f.status === 'active'} onChange={(v) => set('status')(v ? 'active' : 'inactive')} hint="Off hides it from customers" />
+        <Row label="On the menu (selling)" value={f.status === 'active'} onChange={(v) => set('status')(v ? 'active' : 'inactive')} hint="Off: stop selling for now. Hidden from customers and staff ordering; find it under Items → Hidden" />
         <Row label="Featured" value={f.featured} onChange={set('featured')} hint="Shown first on the home page" />
       </Card>
 

@@ -136,6 +136,8 @@ export const api = {
   saveCategory: changesMenu((d) => post('/admin/categories/save', d)),
   adminItems: (p) => get('/admin/items', p),
   saveItem: changesMenu((d) => post('/admin/items/save', d)),
+  // Stop / start selling: { ids: [..], status: 'inactive' | 'active' }
+  setItemStatus: changesMenu((d) => post('/admin/items/status', d)),
   uploadImage: (image, title) => post('/admin/media/upload', { image, title }),
 
   stock: (p) => get('/admin/stock', p),
