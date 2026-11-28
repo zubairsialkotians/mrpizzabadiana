@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 import { SHOP_KEY } from '../config';
 
 const getShopKey = () => SHOP_KEY;
@@ -16,7 +17,34 @@ const getShopKey = () => SHOP_KEY;
 let liveFetch = null;
 export function setCatalogueFetcher(fn) { liveFetch = fn; }
 
-const fileOf = (key) => `${FileSystem.documentDirectory}menu_${String(key).replace(/[^a-zA-Z0-9]/g, '')}.json`;
+const nameOf = (key) => `menu_${String(key).replace(/[^a-zA-Z0-9]/g, '')}`;
+const fileOf = (key) => `${FileSystem.documentDirectory}${nameOf(key)}.json`;
+
+/*
+  Where the menu is kept: a file on phones / tablets; on the desktop app and the web (no files there)
+  the computer's built-in database (IndexedDB, room for big menus).
+*/
+const WEB = Platform.OS === 'web';
+function idb(mode, fn) {
+  return new Promise((resolve, reject) => {
+    const open = globalThis.indexedDB.open('masterpos', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('menus');
+    open.onerror = () => reject(open.error || new Error('Could not open the storage'));
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('menus', mode);
+      const req = fn(tx.objectStore('menus'));
+      tx.oncomplete = () => { db.close(); resolve(req?.result); };
+      tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || new Error('Could not save on this computer')); };
+    };
+  });
+}
+const store = {
+  read: (key) => (WEB ? idb('readonly', (st) => st.get(nameOf(key))).then((v) => { if (v == null) throw new Error('none'); return v; })
+    : FileSystem.readAsStringAsync(fileOf(key))),
+  write: (key, text) => (WEB ? idb('readwrite', (st) => st.put(text, nameOf(key))) : FileSystem.writeAsStringAsync(fileOf(key), text)),
+  remove: (key) => (WEB ? idb('readwrite', (st) => st.delete(nameOf(key))) : FileSystem.deleteAsync(fileOf(key), { idempotent: true })),
+};
 
 let memo = { key: null, data: undefined }; // data: null = no saved menu for this shop
 let syncing = null;
@@ -50,7 +78,7 @@ export async function savedCatalogue() {
   if (memo.key === key && memo.data !== undefined) return memo.data;
   let data = null;
   try {
-    const raw = await FileSystem.readAsStringAsync(fileOf(key));
+    const raw = await store.read(key);
     data = JSON.parse(raw);
     if (!data || !Array.isArray(data.products) || !Array.isArray(data.categories)) data = null;
   } catch (_) {
@@ -78,7 +106,7 @@ export function syncCatalogue() {
       }
       const data = { synced_at: new Date().toISOString(), categories: cats.categories || [], products };
       if (getShopKey() !== key) return; // logged in to another shop meanwhile
-      await FileSystem.writeAsStringAsync(fileOf(key), JSON.stringify(data));
+      await store.write(key, JSON.stringify(data));
       memo = { key, data };
     } catch (e) {
       lastError = e.message || 'Could not save the menu';
@@ -100,7 +128,7 @@ export function refreshCatalogue() {
 export async function clearCatalogue() {
   const key = getShopKey();
   if (!key) return;
-  try { await FileSystem.deleteAsync(fileOf(key), { idempotent: true }); } catch (_) { /* already gone */ }
+  try { await store.remove(key); } catch (_) { /* already gone */ }
   memo = { key, data: null };
   lastError = '';
   emit();
@@ -112,7 +140,7 @@ export function localCategories(d) {
   return { success: true, categories: d.categories };
 }
 
-// /products: category_id, featured, search (name), ids, page, per_page — same order as the server (featured first, then name)
+// /products: category_id, featured, search (name or sku), ids, page, per_page — same order as the server (featured first, then name)
 export function localProducts(d, p = {}) {
   let list = d.products;
   const cat = Number(p.category_id) || 0;
@@ -123,7 +151,8 @@ export function localProducts(d, p = {}) {
   }
   if (p.featured) list = list.filter((x) => x.featured);
   const q = String(p.search || '').trim().toLowerCase();
-  if (q) list = list.filter((x) => x.name.toLowerCase().includes(q));
+  // Name, or the exact barcode / item code (like the server)
+  if (q) list = list.filter((x) => x.name.toLowerCase().includes(q) || (x.sku && String(x.sku).toLowerCase() === q));
   if (p.ids) {
     const ids = new Set(String(p.ids).split(',').map(Number).filter(Boolean));
     list = list.filter((x) => ids.has(x.id));

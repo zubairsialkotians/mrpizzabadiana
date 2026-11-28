@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, Switch, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { Screen, Field, Button, Footer, SelectField, SectionTitle, Card, Chip, BranchField, s } from '../components/ui';
+import { Screen, Field, Button, Footer, SelectField, SectionTitle, Card, Chip, BranchField, Segmented, s } from '../components/ui';
 import { useLoad } from '../components/useData';
+import { useIsFocused } from '@react-navigation/native';
+import { useBarcodeScanner } from '../components/scan';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { catOptions } from '../components/CategoryFilter';
 import { pickAndUpload } from '../services/images';
-import { qtyLabel } from '../services/format';
+import { qtyLabel, money } from '../services/format';
 import { colors } from '../theme';
 
 // Matches SA_UNITS on the server
@@ -42,11 +44,13 @@ export default function ItemFormScreen({ navigation, route }) {
   const forPurchase = !!route.params?.forPurchase;
   const cats = useLoad(() => api.adminCategories().then((r) => r.categories));
   const [f, setF] = useState({
-    name: it?.name || '', description: it?.description || '', sku: it?.sku || '', category_id: it?.category_id || route.params?.category_id || 0,
+    name: it?.name || '', description: it?.description || '', sku: it?.sku || route.params?.sku || '', category_id: it?.category_id || route.params?.category_id || 0,
     unit: it?.unit || 'pcs', price: num(it?.price), compare_price: it?.compare_price ? num(it.compare_price) : '',
     cost_price: it?.cost_price ? num(it.cost_price) : '', min_qty: num(it?.min_qty ?? 1), qty_step: num(it?.qty_step ?? 1),
     low_stock: it?.low_stock ? num(it.low_stock) : '', opening_stock: '', track_stock: it ? it.track_stock : true,
     featured: !!it?.featured, status: it?.status || 'active',
+    // Discount on every sale: '' | 'percent' | 'fixed'
+    discount_type: it?.discount_type || '', discount_value: it?.discount_value ? num(it.discount_value) : '',
   });
   const [options, setOptions] = useState(it?.qty_options ? it.qty_options.split(',').map(Number).filter((n) => n > 0) : []);
   const [images, setImages] = useState(it?.images || []);
@@ -67,6 +71,12 @@ export default function ItemFormScreen({ navigation, route }) {
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
+  // Scanning a barcode / QR anywhere on this form puts it in the SKU / barcode field
+  const focused = useIsFocused();
+  useBarcodeScanner((code) => {
+    setF((x) => ({ ...x, sku: code }));
+    Toast.show({ type: 'success', text1: 'Barcode added', text2: code, visibilityTime: 1500 });
+  }, focused);
 
   const chooseUnit = (unit) => {
     const p = PRESETS[unit];
@@ -109,7 +119,17 @@ export default function ItemFormScreen({ navigation, route }) {
   const quick = QUICK[f.unit] || [1, 2, 3, 5, 6, 10, 12, 24];
   const unit = sized ? 'pcs' : f.unit;
   const unitWord = unit === 'pcs' ? 'pc' : unit;
-  const canSave = !!f.name.trim() && (sized ? sizesOk : Number(f.price) > 0);
+  // The price after the item's discount (same as the server)
+  const discounted = (price) => {
+    const p = Number(price) || 0;
+    const v = Number(f.discount_value) || 0;
+    if (!f.discount_type || v <= 0) return p;
+    return Math.max(0, Math.round((p - (f.discount_type === 'percent' ? p * Math.min(v, 100) / 100 : v)) * 100) / 100);
+  };
+  const lowestPrice = sized ? Math.min(...sizes.map((z) => Number(z.price) || Infinity)) : Number(f.price) || 0;
+  const discountError = f.discount_type === 'percent' && Number(f.discount_value) > 100 ? 'At most 100%'
+    : f.discount_type === 'fixed' && Number(f.discount_value) > 0 && Number(f.discount_value) >= lowestPrice ? 'Must be less than the price' : '';
+  const canSave = !!f.name.trim() && (sized ? sizesOk : Number(f.price) > 0) && !discountError;
 
   return (
     <Screen title={it ? 'Edit item' : 'New item'} footer={<Footer><Button testID="item-save" title="Save item" onPress={save} loading={busy} disabled={!canSave} /></Footer>}>
@@ -203,6 +223,25 @@ export default function ItemFormScreen({ navigation, route }) {
       </>
       )}
 
+      {/* Discount every time it is sold (until removed): % or a fixed amount off the price (each size's price too) */}
+      <SectionTitle>Discount</SectionTitle>
+      <Card>
+        <Segmented value={f.discount_type} onChange={(v) => setF((x) => ({ ...x, discount_type: v, discount_value: v ? x.discount_value : '' }))}
+          options={[{ value: '', label: 'No discount' }, { value: 'percent', label: '% off' }, { value: 'fixed', label: 'Rs off' }]} />
+        {!!f.discount_type && (
+          <Field style={{ marginTop: 12, marginBottom: 6 }} label={f.discount_type === 'percent' ? 'Discount (%)' : `Discount (Rs per ${unitWord})`}
+            value={f.discount_value} onChangeText={(v) => set('discount_value')(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad"
+            error={discountError} testID="item-discount" />
+        )}
+        <Text style={[s.itemMeta, { marginTop: 6 }]}>
+          {!f.discount_type || !(Number(f.discount_value) > 0)
+            ? 'Give this item a discount on every sale: customers and staff pay the lower price, and it shows as an offer.'
+            : sized
+              ? `Each size sells for ${sizes.filter((z) => Number(z.price) > 0).map((z) => `${z.name} ${money(discounted(z.price))}`).join(' · ') || '…'}`
+              : `Sells at ${money(discounted(f.price))} per ${unitWord} instead of ${money(Number(f.price) || 0)}.`}
+        </Text>
+      </Card>
+
       <SectionTitle>Stock</SectionTitle>
       <Card>
         <Row label="Track stock" value={f.track_stock} onChange={set('track_stock')} hint="Off for items you always have" />
@@ -227,7 +266,8 @@ export default function ItemFormScreen({ navigation, route }) {
       </Card>
 
       <Field label="Description (optional)" value={f.description} onChangeText={set('description')} multiline />
-      <Field label="SKU / barcode (optional)" value={f.sku} onChangeText={set('sku')} autoCapitalize="none" />
+      <Field label="SKU / barcode (optional)" value={f.sku} onChangeText={set('sku')} autoCapitalize="none"
+        hint={Platform.OS === 'web' ? 'Scan the barcode / QR with the scanner to fill this in.' : undefined} />
     </Screen>
   );
 }

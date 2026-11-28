@@ -65,7 +65,7 @@ export function MenuSyncCard() {
       <Text style={[s.itemMeta, { marginTop: 10 }]}>
         {st.saved
           ? 'Taking orders uses this saved copy, so it is fast and needs less internet. Items, categories and stock you change in this app are synced by themselves; press Sync after changes made on another phone. The server still checks stock and prices when an order is placed.'
-          : 'Save the categories and items on this device so taking orders is faster and does not ask the server every time.'}
+          : 'Save the categories and items on this device so taking orders is faster and does not ask the server every time. Needed to take orders with no internet.'}
       </Text>
       {!!st.error && <Text style={{ color: colors.danger, marginTop: 6 }}>{st.error}</Text>}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>

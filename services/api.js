@@ -1,4 +1,5 @@
 import { API_BASE, SHOP_KEY } from '../config';
+import { isOfflineMode } from './offlineMode';
 import { setCatalogueFetcher, savedCatalogue, refreshCatalogue, localCategories, localProducts, localProduct } from './catalogCache';
 
 export class AuthError extends Error {}
@@ -22,21 +23,39 @@ function query(params = {}) {
 // Every call names the shop (shop_key) and, when logged in, the session (Bearer + token param:
 // some hosts strip the Authorization header). The shop key goes as a param, not a header,
 // so browsers don't need a CORS preflight for it.
-async function request(method, path, data = {}) {
+// timeout (ms): give up waiting and treat it as no internet (a weak connection that never answers)
+// Offline mode (slow internet): new staff orders and returns don't wait for the server, they are kept on the device.
+// Sending them later (offline: 1, from offlineOrders.js) still goes through.
+const KEPT_ON_DEVICE = new Set(['/pos/orders/place', '/pos/returns/place']);
+
+async function request(method, path, data = {}, { timeout = 0 } = {}) {
+  if (isOfflineMode() && KEPT_ON_DEVICE.has(path) && !data.offline) {
+    const err = new Error('Offline mode is on');
+    err.offline = true;
+    err.forced = true;
+    throw err;
+  }
   const headers = { Accept: 'application/json' };
   if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
   const payload = { ...data, shop_key: SHOP_KEY, ...(sessionToken ? { token: sessionToken } : {}) };
 
   let res;
+  const ctl = timeout && typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), timeout) : null;
   try {
     if (method === 'GET') {
-      res = await fetch(`${BASE}${path}?${query(payload)}`, { headers });
+      res = await fetch(`${BASE}${path}?${query(payload)}`, { headers, signal: ctl?.signal });
     } else {
       headers['Content-Type'] = 'application/json';
-      res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(payload) });
+      res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(payload), signal: ctl?.signal });
     }
   } catch (e) {
-    throw new Error('No internet connection. Please try again.');
+    // offline: the server was not reached (or did not answer in time), as opposed to the server saying no
+    const err = new Error('No internet connection. Please try again.');
+    err.offline = true;
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   const body = await res.json().catch(() => null);
@@ -147,7 +166,9 @@ export const api = {
   deleteNews: (id) => post('/admin/news/delete', { id }),
 
   // Orders taken in the app (owner / branch admin / cashier)
-  posPlace: (d) => post('/pos/orders/place', d),
+  // offline_ref makes sending it again safe (the server returns the first order); 20 s, then it counts as no internet
+  posPlace: (d) => request('POST', '/pos/orders/place', d, { timeout: 20000 }),
+  posReturn: (d) => request('POST', '/pos/returns/place', d, { timeout: 20000 }),
   posUpdate: (d) => post('/pos/orders/update', d),
 
   // Kitchen & rider logins (owner)

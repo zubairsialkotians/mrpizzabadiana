@@ -35,7 +35,10 @@ export const printCols = (p) => {
   const list = PRINT_COLS[p.paper === 58 ? 58 : 80];
   return list.includes(Number(p.cols)) ? Number(p.cols) : list[0];
 };
-export const DEFAULT_PRINTER = { method: 'system', paper: 'a4', copies: 1, width: 0, cols: 0 };
+// device: MasterPOS Desktop only — the computer's printer that bills go to with no print window ('' = ask every time)
+export const DEFAULT_PRINTER = { method: 'system', paper: 'a4', copies: 1, width: 0, cols: 0, device: '' };
+// MasterPOS Desktop (Electron) gives the page its printers and silent printing (masterposdesktop/electron/preload.cjs)
+export const desktopBridge = () => (typeof globalThis !== 'undefined' && globalThis.desktop?.isDesktop ? globalThis.desktop : null);
 const RAWBT_STORE = 'https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter';
 
 export async function getPrinter() {
@@ -56,7 +59,7 @@ export async function savePrinter(cfg) {
 export async function printBill(order, shop, cfg) {
   const p = cfg || await getPrinter();
   const copies = Math.min(3, Math.max(1, Number(p.copies) || 1));
-  if (Platform.OS === 'web') { await printOnWeb(order, shop, p.paper, printWidth(p), copies); return; }
+  if (Platform.OS === 'web') { await printOnWeb(order, shop, p.paper, printWidth(p), copies, p.device); return; }
   if (p.method === 'rawbt' && Platform.OS === 'android') {
     const text = receiptText(order, shop, printCols(p)); // thermal rolls only (A4 → 80 mm)
     const data = `rawbt:base64,${toBase64(escpos(text, copies))}`;
@@ -114,17 +117,44 @@ export function setPrintHost(fn) { host = fn; }
   with the bill; it lists the PC's printers (USB, network, Wi-Fi, Bluetooth set up in Windows / macOS)
   and "Save as PDF". Printed from a hidden frame, so pop-up blockers don't stop it.
 */
-function printOnWeb(order, shop, paper, width, copies = 1) {
+/*
+  Computer printers (desktop app / browser): grey and coloured text comes out faint, above all on receipt printers.
+  Everything prints pure black and bolder, lines black, no tinted backgrounds.
+*/
+const DARK_PRINT = `
+  body, body * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Arial, Tahoma, "Segoe UI", sans-serif; font-weight: 600; }
+  b, .name, .title, .l1, .bh, .grid th, .totals tr.b td, .totals tr.big td, .stamp { font-weight: 800 !important; }
+  .grid th { background: #fff !important; border-bottom: 2px solid #000; border-top: 2px solid #000; }
+  .grid td { border-bottom: 1px solid #000 !important; }
+  .grid tr.foot td { background: #fff !important; }
+  .top { border-bottom: 2px solid #000 !important; }
+  .totals tr.big td { border-top: 2px solid #000 !important; }
+  .totals tr.div td, .pfoot { border-top: 1px dashed #000 !important; }
+  .summary div { border-color: #000 !important; }
+  .stamp { border-color: #000 !important; }
+  .sub, .notes, .muted, .dev { font-weight: 600; }
+`;
+
+function printOnWeb(order, shop, paper, width, copies = 1, device = '') {
+  const model = buildBill(order, shop);
+  // The same bill as the Bill screen; on rolls the page is the printer's printable width
+  const mm = width || 72;
+  const page = (paper === 'a4'
+    ? '@page { size: A4; margin: 12mm; }'
+    // drawn 360 px wide (like on a phone), then scaled to the printable width
+    : `@page { size: ${mm}mm auto; margin: 0 1mm; } body { width: 360px; zoom: ${(((mm - 2) * 96) / 25.4 / 360).toFixed(3)}; }`) + DARK_PRINT;
+  const desk = desktopBridge();
+  if (desk) {
+    // Desktop app: straight to the chosen printer (no window), or its print window when none is chosen
+    return desk.printHtml({
+      html: docHtml(model, model.company.logo_url).replace('@page { margin: 28px; }', page),
+      device: device || '', silent: !!device, copies, paperMm: paper === 'a4' ? 0 : Number(paper) || 80,
+    }).then((r) => { if (r && r.ok === false) throw new Error(r.error || 'The printer did not print'); });
+  }
   return new Promise((resolve, reject) => {
     const doc = globalThis.document;
     if (!doc) { reject(new Error('Printing is not available here')); return; }
-    const model = buildBill(order, shop);
-    // The same bill as the Bill screen; on rolls the page is the printer's printable width
-    const mm = width || 72;
-    const page = paper === 'a4'
-      ? '@page { size: A4; margin: 12mm; }'
-      // drawn 360 px wide (like on a phone), then scaled to the printable width
-      : `@page { size: ${mm}mm auto; margin: 0 1mm; } body { width: 360px; zoom: ${(((mm - 2) * 96) / 25.4 / 360).toFixed(3)}; }`;
     const html = repeatBody(docHtml(model, model.company.logo_url).replace('@page { margin: 28px; }', page), copies);
     const frame = doc.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');
@@ -199,15 +229,25 @@ export function receiptText(o, shop, w = 48) {
   m.from.forEach((x) => wrap(x, w).forEach((y) => L.push({ t: center(y, w) })));
   if (m.stamp) L.push({ t: center(`*** ${m.stamp} ***`, w), bold: true });
   L.push({ t: rule });
-  L.push({ t: pad('Bill', o.order_no, w), bold: true });
-  L.push({ t: pad('Date', niceDate(o.created_at), w) });
-  L.push({ t: pad(o.fulfilment === 'pickup' ? 'Takeaway' : 'Delivery', o.name, w) });
-  if (o.phone) L.push({ t: pad('Phone', o.phone, w) });
-  if (o.fulfilment !== 'pickup' && o.address) wrap(`Address: ${o.address}`, w).forEach((y) => L.push({ t: y }));
+  if (o.is_return) {
+    // Walk-in return slip
+    L.push({ t: center('*** RETURN ***', w), bold: true });
+    m.meta.forEach(([k, v]) => L.push({ t: pad(k, v, w), bold: k === 'Return' }));
+  } else {
+    L.push({ t: pad('Bill', o.order_no, w), bold: true });
+    L.push({ t: pad('Date', niceDate(o.created_at), w) });
+    L.push({ t: pad(o.fulfilment === 'pickup' ? 'Takeaway' : 'Delivery', o.name, w) });
+    if (o.phone) L.push({ t: pad('Phone', o.phone, w) });
+    if (o.fulfilment !== 'pickup' && o.address) wrap(`Address: ${o.address}`, w).forEach((y) => L.push({ t: y }));
+  }
   L.push({ t: rule });
   o.items.forEach((it) => {
     wrap(it.size && !String(it.name).includes(`(${it.size})`) ? `${it.name} (${it.size})` : it.name, w).forEach((y) => L.push({ t: y }));
-    L.push({ t: pad(`  ${qtyLabel(it.qty, it.unit)} x ${money(it.price)}`, money(it.line_total), w) });
+    const list = Number(it.list_price) || 0;
+    const off = list > Number(it.price) + 0.001 ? (list - it.price) * it.qty : 0;
+    L.push({ t: pad(`  ${qtyLabel(it.qty, it.unit)} x ${money(off ? list : it.price)}${o.is_return && !it.restock ? ' (damaged)' : ''}`, money(off ? list * it.qty : it.line_total), w) });
+    // Item discount on its own line under the item
+    if (off) L.push({ t: pad('  Discount', `-${money(off)}`, w) });
   });
   L.push({ t: rule });
   m.totals.forEach((x) => L.push({ t: pad(x.label, x.value, w), bold: !!x.bold }));

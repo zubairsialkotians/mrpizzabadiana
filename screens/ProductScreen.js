@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Screen, Footer, Button, Chip, Loading, ErrorBox, HeaderButton } from '../components/ui';
-import { ProductImage, QtyStepper } from '../components/shop';
+import { ProductImage, QtyStepper, offLabel } from '../components/shop';
 import { useLoad } from '../components/useData';
 import { useCart } from '../components/CartContext';
 import { api } from '../services/api';
@@ -44,7 +44,8 @@ export default function ProductScreen({ navigation, route }) {
   if (!shown) return <Screen title="Product">{loading ? <Loading /> : <ErrorBox message={error} onRetry={reload} />}</Screen>;
 
   const images = shown.images?.length ? shown.images : [{ url: shown.image }];
-  const off = !sized && shown.compare_price > shown.price ? Math.round((1 - shown.price / shown.compare_price) * 100) : 0;
+  // Fixed discount shows as "Rs 50 OFF", a % one as "10% OFF"; sizes: the item's discount on every size
+  const off = offLabel(shown);
   const unitPrice = sized ? (sizes.find((z) => z.name === size)?.price ?? shown.price) : shown.price;
   // Stock is for the item as a whole: other sizes already in the cart count too
   const otherSizes = sized ? cart.qtyOf(shown.id) - cart.qtyOf(shown.id, size) : 0;
@@ -91,8 +92,8 @@ export default function ProductScreen({ navigation, route }) {
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
           <Text style={st.price}>{sized ? money(unitPrice) : perUnit(shown.price, shown.unit)}</Text>
           {sized && !!size && <Text style={{ color: colors.muted, fontWeight: '700' }}>{size}</Text>}
-          {off > 0 && <Text style={st.strike}>{money(shown.compare_price)}</Text>}
-          {off > 0 && <Text style={st.off}>{off}% OFF</Text>}
+          {!!off && !sized && shown.compare_price > shown.price && <Text style={st.strike}>{money(shown.compare_price)}</Text>}
+          {!!off && <Text style={st.off}>{off}</Text>}
         </View>
 
         {!shown.in_stock ? (

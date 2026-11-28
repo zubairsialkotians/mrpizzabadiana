@@ -3,7 +3,8 @@ import { View, Text, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Card, Button, Segmented, s } from './ui';
 import { useAuth } from './AuthContext';
-import { getPrinter, savePrinter, printBill, openRawbtStore, PAPERS, paperLabel, PRINT_WIDTHS, printWidth, PRINT_COLS, printCols } from '../services/printer';
+import { getPrinter, savePrinter, printBill, openRawbtStore, desktopBridge, PAPERS, paperLabel, PRINT_WIDTHS, printWidth, PRINT_COLS, printCols } from '../services/printer';
+import { Chip } from './ui';
 import { colors } from '../theme';
 
 // print(order): prints the bill on this device's printer, with a clear message when it can't
@@ -46,6 +47,11 @@ export function PrinterCard() {
   const [cfg, setCfg] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { getPrinter().then(setCfg); }, []);
+  // Desktop app: the computer's printers
+  const desk = desktopBridge();
+  const [printers, setPrinters] = useState(null);
+  const loadPrinters = () => desk?.printers().then((l) => setPrinters(l || [])).catch(() => setPrinters([]));
+  useEffect(() => { loadPrinters(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!cfg) return null;
   const update = async (patch) => setCfg(await savePrinter({ ...cfg, ...patch }));
   const test = async () => {
@@ -67,16 +73,34 @@ export function PrinterCard() {
     <Card>
       <Text style={{ fontWeight: '800', color: colors.text, marginBottom: 8 }}>Print with</Text>
       <Segmented value={android ? cfg.method : 'system'} onChange={(v) => update({ method: v, ...(v === 'rawbt' && cfg.paper === 'a4' ? { paper: 80 } : {}) })}
-        options={[{ value: 'system', label: Platform.OS === 'web' ? 'Browser printing' : 'Phone printing' }, ...(android ? [{ value: 'rawbt', label: 'Bluetooth printer' }] : [])]} />
+        options={[{ value: 'system', label: Platform.OS === 'web' ? (desk ? 'Computer printer' : 'Browser printing') : 'Phone printing' }, ...(android ? [{ value: 'rawbt', label: 'Bluetooth printer' }] : [])]} />
       <Text style={[s.itemMeta, { marginTop: 8 }]}>
         {cfg.method === 'rawbt' && android
           ? 'For Bluetooth / USB thermal receipt printers. Install the free RawBT app, pair your printer in it once, then bills print straight away without a dialog.'
-          : Platform.OS === 'web'
+          : desk
+            ? 'Prints on the printers set up on this computer (USB, network, Wi-Fi, receipt printers). Choose the printer below once.'
+            : Platform.OS === 'web'
             ? 'Opens the browser\'s print window with the bill. It lists the printers connected to this computer (USB, Wi-Fi, network, Bluetooth). If none shows, connect and add the printer in Windows / macOS settings first; Save as PDF is always there.'
             : 'Opens the phone\'s print screen: choose a Wi-Fi / network printer, a printer app (HP, Epson, Mopria, RawBT…) or Save as PDF.'}
       </Text>
       {cfg.method === 'rawbt' && android && (
         <Text style={{ color: colors.primary, fontWeight: '700', marginTop: 6 }} onPress={openRawbtStore}>Get RawBT on Google Play →</Text>
+      )}
+      {!!desk && (
+        <>
+          <Text style={{ fontWeight: '800', color: colors.text, marginTop: 14, marginBottom: 8 }}>Printer</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <Chip label="Ask every time" active={!cfg.device} onPress={() => update({ device: '' })} />
+            {(printers || []).map((pr) => (
+              <Chip key={pr.name} label={`${pr.displayName || pr.name}${pr.isDefault ? ' (default)' : ''}`} active={cfg.device === pr.name} onPress={() => update({ device: pr.name })} />
+            ))}
+          </View>
+          <Text style={[s.itemMeta, { marginTop: 6 }]}>
+            {printers && !printers.length ? 'No printers found on this computer. Add the printer in Windows settings, then press Refresh. '
+              : cfg.device ? `Bills print straight to ${cfg.device}, with no print window. ` : 'The print window opens for each bill. Choose a printer to print bills straight away. '}
+            <Text style={{ color: colors.primary, fontWeight: '700' }} onPress={loadPrinters}>Refresh</Text>
+          </Text>
+        </>
       )}
       <Text style={{ fontWeight: '800', color: colors.text, marginTop: 14, marginBottom: 8 }}>Paper</Text>
       <Segmented value={paper} onChange={(v) => update({ paper: v })} options={papers.map((p) => ({ value: p, label: paperLabel(p) }))} />

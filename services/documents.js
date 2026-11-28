@@ -4,6 +4,7 @@ import { DEVELOPER_PHONE } from '../config';
 // Last line of every bill and document
 export const DEVELOPER_LINE = `Software development: ${DEVELOPER_PHONE.replace(/^(\d{4})(\d+)$/, '$1 $2')}`;
 import { money, niceDate, currencySymbol, qtyLabel, STATUS_LABELS, paymentLabel } from './format';
+import { round2 } from './qty';
 
 /*
   Printable documents (bill, order sheet) as one plain "model".
@@ -33,15 +34,52 @@ const companyOf = (shop = {}) => ({
   name: shop.name || '', logo_url: shop.logo_url || '', support_phone: shop.phone || '', bill_caption: shop.bill_caption || '',
 });
 
-// Customer bill / receipt for one order (no costs)
+/*
+  Return slip for a walk-in return (Return mode). Printed like a bill: shaped like an order with is_return,
+  { is_return, return_no, created_at, by, note, branch_*, refund, items: [{ name, unit, qty, price, line_total, restock }] }
+*/
+export function buildReturnSlip(r, shop) {
+  const cur = currencySymbol();
+  const damaged = r.items.filter((it) => !it.restock).length;
+  return {
+    title: 'RETURN',
+    stamp: '',
+    company: companyOf(shop),
+    from: [r.branch_name, r.branch_address, r.branch_phone ? `Ph: ${r.branch_phone}` : ''].filter(Boolean),
+    meta: [['Return', r.return_no], ['Date', niceDate(r.created_at)], ...(r.by ? [['By', r.by]] : [])],
+    blocks: [{
+      columns: [
+        { label: '#', w: 0.5 }, { label: 'Item', w: 3.2 }, { label: 'Qty', w: 1.4, align: 'right' },
+        { label: 'Rate', w: 1.3, align: 'right' }, { label: `Refund (${cur})`, w: 1.7, align: 'right' },
+      ],
+      rows: r.items.map((it, i) => ({
+        cells: [String(i + 1), { text: it.name, sub: it.restock ? '' : 'damaged' }, qtyLabel(it.qty, it.unit), num(it.price), num(it.line_total)],
+      })),
+    }],
+    totals: [{ label: 'Refund to customer', value: money(r.refund), bold: true, big: true, tone: 'bad' }],
+    notes: [r.note ? `Reason: ${r.note}` : '', damaged ? `${damaged} damaged item${damaged === 1 ? '' : 's'} not put back in stock` : ''].filter(Boolean),
+    qr: null,
+  };
+}
+
+// Customer bill / receipt for one order (no costs). A walk-in return (is_return) prints as a return slip.
 export function buildBill(o, shop) {
+  if (o.is_return) return buildReturnSlip(o, shop);
   const cur = currencySymbol();
   const cancelled = o.status === 'cancelled';
-  const rows = o.items.map((it, i) => ({
-    cells: [String(i + 1), { text: it.name, sub: it.returned_qty > 0 ? `returned ${qtyLabel(it.returned_qty, it.unit)}` : '' },
-      qtyLabel(it.qty, it.unit), num(it.price), num(it.line_total)],
-  }));
+  // An item with its own discount: the rate is its normal price, and the discount shows under the name
+  const offOf = (it) => {
+    const list = Number(it.list_price) || 0;
+    return list > Number(it.price) + 0.001 ? { list, off: round2((list - it.price) * it.qty) } : null;
+  };
+  const rows = o.items.map((it, i) => {
+    const d = offOf(it);
+    const sub = [d ? `discount −${num(d.off)} (${num(it.price)} each)` : '', it.returned_qty > 0 ? `returned ${qtyLabel(it.returned_qty, it.unit)}` : ''].filter(Boolean).join(' · ');
+    return { cells: [String(i + 1), { text: it.name, sub }, qtyLabel(it.qty, it.unit), num(d ? d.list : it.price), num(it.line_total)] };
+  });
+  const itemsOff = round2(o.items.reduce((a, it) => a + (offOf(it)?.off || 0), 0));
   const totals = [
+    ...(itemsOff > 0 ? [{ label: 'Items at normal price', value: money(round2(o.subtotal + itemsOff)) }, { label: 'Item discounts', value: `-${money(itemsOff)}`, tone: 'good' }] : []),
     { label: 'Items', value: money(o.subtotal) },
     { label: o.fulfilment === 'pickup' ? 'Pickup' : 'Delivery', value: o.delivery_fee ? money(o.delivery_fee) : 'Free' },
     ...(o.discount > 0 ? [{ label: `Discount${o.discount_type === 'percent' ? ` (${Number(o.discount_value)}%)` : ''}`, value: `-${money(o.discount)}` }] : []),
@@ -49,6 +87,11 @@ export function buildBill(o, shop) {
     ...(o.service > 0 ? [{ label: `Service charge${o.service_type === 'percent' ? ` (${Number(o.service_value)}%)` : ''}`, value: `+${money(o.service)}` }] : []),
     { label: 'Total', value: money(o.total), bold: true, big: true },
   ];
+  // Counter orders: the cash given and the change given back
+  if (o.cash_received > 0) {
+    totals.push({ label: 'Cash received', value: money(o.cash_received), divider: true });
+    totals.push({ label: 'Change', value: money(round2(Math.max(0, o.cash_received - o.total))), bold: true });
+  }
   if (o.refunded > 0) {
     totals.push({ label: 'Refunded (returns)', value: `-${money(o.refunded)}`, tone: 'bad', divider: true });
     totals.push({ label: 'Net paid', value: money(o.total - o.refunded), bold: true });

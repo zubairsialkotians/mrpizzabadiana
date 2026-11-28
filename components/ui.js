@@ -108,11 +108,13 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
   );
 }
 
-export function Field({ label, error, hint, style, inputStyle, multiline, ...props }) {
+// ref reaches the text box (e.g. to move to the next field)
+export const Field = React.forwardRef(function Field({ label, error, hint, style, inputStyle, multiline, ...props }, ref) {
   return (
     <View style={[{ marginBottom: 14 }, style]}>
       {!!label && <Text style={s.label}>{label}</Text>}
       <TextInput
+        ref={ref}
         placeholderTextColor={colors.faint}
         style={[s.input, multiline && { height: 90, textAlignVertical: 'top', paddingTop: 12 }, error && { borderColor: colors.danger }, inputStyle]}
         multiline={multiline}
@@ -122,7 +124,7 @@ export function Field({ label, error, hint, style, inputStyle, multiline, ...pro
       {!!hint && !error && <Text style={s.hint}>{hint}</Text>}
     </View>
   );
-}
+});
 
 export function Chip({ label, active, onPress, icon }) {
   return (

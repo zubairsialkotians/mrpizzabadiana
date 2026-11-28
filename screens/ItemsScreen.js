@@ -35,9 +35,11 @@ export default function ItemsScreen({ navigation }) {
               <Text style={s.itemTitle} numberOfLines={1}>{it.name}</Text>
               {it.status === 'inactive' && <Badge status="inactive" label="Hidden" />}
               {it.featured && <Badge status="confirmed" label="Featured" />}
+              {!!it.discount_type && <Badge status="delivered" label={it.discount_type === 'percent' ? `${Number(it.discount_value)}% off` : `${money(it.discount_value)} off`} />}
             </View>
             <Text style={s.itemSub} numberOfLines={1}>
               {it.sizes?.length ? it.sizes.map((z) => `${z.name} ${money(z.price)}`).join(' · ') : perUnit(it.price, it.unit)}
+              {!!it.discount_type && !it.sizes?.length ? ` → ${money(it.sale_price)}` : ''}
               {it.category_name ? ` · ${it.category_name}` : ''}
             </Text>
             <Text style={[s.itemMeta, it.track_stock && it.stock <= it.low_stock && { color: colors.danger }]}>

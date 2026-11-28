@@ -1,18 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import { useChordKeys, pendingKeys } from '../components/keys';
 import { View, Text, Modal, FlatList, TouchableOpacity, ActivityIndicator, useWindowDimensions, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { Screen, Card, KV, Field, Button, Footer, SectionTitle, Segmented, SearchBar, ChipRow, Chip, Empty, BranchField, s } from '../components/ui';
-import { ProductImage } from '../components/shop';
+import { Screen, Card, Button, Footer, SectionTitle, SearchBar, Chip, Empty, s } from '../components/ui';
+import { usePosForm, CheckoutFields, orderErrorToast, placeStaffOrder } from '../components/PosCheckout';
+import { ProductImage, DiscountNote } from '../components/shop';
 import { useAuth } from '../components/AuthContext';
-import { useCart, useLineStore, LinesScope, lineName } from '../components/CartContext';
+import { useCart, useLineStore, LinesScope, lineName, customLine, catalogueIds, lineDiscount } from '../components/CartContext';
+import { CustomItemButton } from '../components/CustomItem';
 import { Catalogue } from '../components/Catalogue';
 import { CartPanel, SizePicker, SPLIT_MIN_WIDTH, panelWidth } from '../components/CartPanel';
 import { api } from '../services/api';
 import { CategoryChips } from '../components/CategoryFilter';
 import { money, qtyLabel } from '../services/format';
-import { nextQty, prevQty, minOf, round2, deliveryFee } from '../services/qty';
+import { nextQty, prevQty, minOf, round2 } from '../services/qty';
+import { confirmAction } from '../services/confirm';
 import { usePrintBill } from '../components/PrintBill';
 import { colors } from '../theme';
 
@@ -27,40 +32,34 @@ const lineKey = (itemId, size) => `${itemId}|${(size || '').toLowerCase()}`;
 
 export default function PosOrderScreen({ navigation, route }) {
   const editing = route.params?.order || null;
-  const { shop, isOwner, homeRoute } = useAuth();
+  const { shop, homeRoute } = useAuth();
   const cart = useCart();
   const { print } = usePrintBill();
   // Editing: the order's items, with the same rules as the cart (the shop grid and order panel work on it on tablets)
   const edit = useLineStore();
   const lines = (editing ? edit.lines : cart.lines).map((l) => ({
-    key: lineKey(l.item_id, l.size), item_id: l.item_id, size: l.size || '', name: lineName(l), unit: l.unit, price: l.price, qty: l.qty, rules: l,
+    key: lineKey(l.item_id, l.size), item_id: l.item_id, custom: !!l.custom, size: l.size || '', name: lineName(l), unit: l.unit, price: l.price, qty: l.qty, rules: l,
+    was: l.was, disc_label: l.disc_label,
   }));
   const [picker, setPicker] = useState(false);
   const { width } = useWindowDimensions();
   const tablet = width >= SPLIT_MIN_WIDTH;
-  const [f, setF] = useState({
-    fulfilment: editing?.fulfilment || 'pickup', name: '', phone: '', address: '', note: '', branch_id: 0,
-    // Editing: the order's own values. New order: tax / service charge start from the shop's defaults (Shop settings)
-    ...Object.fromEntries(['discount', 'tax', 'service'].flatMap((k) => {
-      const from = editing || (k === 'discount' ? null : shop);
-      return [
-        [`${k}_type`, from?.[`${k}_type`] || ''],
-        [`${k}_value`, Number(from?.[`${k}_value`]) > 0 ? String(from[`${k}_value`]) : ''],
-      ];
-    })),
-  });
+  const form = usePosForm({ lines, editing });
+  const { f } = form;
   const [saving, setSaving] = useState(false);
-  const set = (k) => (v) => setF((p) => ({ ...p, [k]: v }));
 
   // Editing: start from the order's lines, then take the catalogue's rules (steps, minimums) for − / +
   useEffect(() => {
     if (!editing) return;
-    edit.setLines(editing.items.map((it) => ({
-      item_id: it.item_id, size: it.size || '', name: it.name, unit: it.unit, price: it.price, image: it.image || '', qty: it.qty,
-      min_qty: 1, qty_step: 1, max_qty: null, qty_options: [],
-    })));
-    const ids = [...new Set(editing.items.map((it) => it.item_id))].join(',');
-    api.products({ ids, per_page: 60 }).then((r) => edit.applyRules(r.products || [])).catch(() => {});
+    edit.setLines(editing.items.map((it) => (!Number(it.item_id)
+      // A custom item on the order (no catalogue item)
+      ? customLine({ name: it.name, price: it.price, qty: it.qty })
+      : {
+        item_id: it.item_id, size: it.size || '', name: it.name, unit: it.unit, price: it.price, image: it.image || '', qty: it.qty, was: it.list_price,
+        min_qty: 1, qty_step: 1, max_qty: null, qty_options: [],
+      })));
+    const ids = catalogueIds(editing.items.filter((it) => Number(it.item_id)));
+    if (ids) api.products({ ids, per_page: 60 }).then((r) => edit.applyRules(r.products || [])).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Phone picker: tap adds the item's first amount, or one more step when it's already there
@@ -82,48 +81,50 @@ export default function PosOrderScreen({ navigation, route }) {
     if (l) edit.remove(l.item_id, l.size);
   };
 
-  const subtotal = round2(lines.reduce((a, l) => a + round2(l.qty * l.price), 0));
-  const fee = editing ? Number(editing.delivery_fee) || 0 : deliveryFee(shop, subtotal, f.fulfilment);
-  const base = round2(subtotal + fee);
-  const adj = (k, on) => {
-    const type = f[`${k}_type`];
-    const value = Number(f[`${k}_value`]) || 0;
-    const amount = !type || value <= 0 ? 0 : round2(type === 'percent' ? on * Math.min(value, 100) / 100 : (k === 'discount' ? Math.min(value, on) : value));
-    const error = type === 'percent' && value > 100 ? 'At most 100%' : k === 'discount' && type === 'fixed' && value > on ? `At most ${money(on)}` : null;
-    return { type, value, amount, error, pct: type === 'percent' && amount > 0 ? ` (${value}%)` : '' };
+  const { total, moneyError, needsContact } = form;
+
+  // Keyboard (desktop): Ctrl+A A cash received, Ctrl+S S place / save
+  const cashRef = useRef(null);
+  const screenFocused = useIsFocused();
+  const placeKey = () => {
+    if (saving || !lines.length) return;
+    if (needsContact) { Toast.show({ type: 'error', text1: 'Delivery needs the customer\'s phone and address' }); return; }
+    if (moneyError) { Toast.show({ type: 'error', text1: moneyError }); return; }
+    submit();
   };
-  const disc = adj('discount', base);
-  const after = round2(base - disc.amount);
-  const tax = adj('tax', after);
-  const service = adj('service', after);
-  const total = round2(after + tax.amount + service.amount);
-  const moneyError = disc.error || tax.error || service.error;
-  const needsContact = !editing && f.fulfilment === 'delivery' && (!f.phone.trim() || !f.address.trim());
+  useChordKeys({ a: () => cashRef.current?.focus(), s: placeKey }, screenFocused);
+  useEffect(() => {
+    if (pendingKeys.cash) { pendingKeys.cash = false; setTimeout(() => cashRef.current?.focus(), 300); }
+    if (pendingKeys.place) { pendingKeys.place = false; setTimeout(placeKey, 300); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     setSaving(true);
-    const payload = {
-      items: lines.map((l) => ({ item_id: l.item_id, size: l.size, qty: l.qty })),
-      ...Object.fromEntries([['discount', disc], ['tax', tax], ['service', service]].flatMap(([k, a]) => [
-        [`${k}_type`, a.amount > 0 ? a.type : ''], [`${k}_value`, a.amount > 0 ? a.value : 0],
-      ])),
-    };
     try {
       if (editing) {
-        const r = await api.posUpdate({ id: editing.id, ...payload });
+        const r = await api.posUpdate({ id: editing.id, ...form.payload() });
         Toast.show({ type: 'success', text1: r.message });
         navigation.goBack();
       } else {
-        const r = await api.posPlace({ ...payload, fulfilment: f.fulfilment, name: f.name, phone: f.phone, address: f.address, note: f.note, branch_id: f.branch_id });
-        Toast.show({ type: 'success', text1: r.message });
+        const r = await placeStaffOrder(form);
         cart.clear();
+        if (r.offline) {
+          // No internet: kept on this device (sent later), so there is no order screen yet. Print now, or tap to print
+          const manual = shop?.bill_print === 'manual';
+          Toast.show({ type: 'info', text1: r.message, text2: `It is sent to the server when the internet is back.${manual ? ' Tap here to print the bill.' : ''}`, visibilityTime: 7000,
+            onPress: manual ? () => { Toast.hide(); print(r.order); } : undefined });
+          if (!manual) print(r.order);
+          navigation.reset({ index: 0, routes: [{ name: homeRoute }] });
+          return;
+        }
+        Toast.show({ type: 'success', text1: r.message });
         // Shop settings → Bill printing: print right away unless the shop prints only with the button
         if (shop?.bill_print !== 'manual') print(r.order);
         // Shop → cart → here: land on the new order, with this login's home behind it
         navigation.reset({ index: 1, routes: [{ name: homeRoute }, { name: 'AdminOrderDetail', params: { id: r.order.id } }] });
       }
     } catch (e) {
-      Toast.show({ type: 'error', text1: editing ? 'Could not update the order' : 'Could not place the order', text2: e.message, visibilityTime: 7000 });
+      orderErrorToast(e, navigation, editing);
     } finally {
       setSaving(false);
     }
@@ -150,7 +151,10 @@ export default function PosOrderScreen({ navigation, route }) {
           {!lines.length && <Text style={[s.itemMeta, { paddingVertical: 10 }]}>No items. Add them in the shop.</Text>}
           {lines.map((l, i) => (
             <View key={l.key} style={{ flexDirection: 'row', gap: 8, paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: colors.border }}>
-              <Text style={{ flex: 1, color: colors.text }}><Text style={{ fontWeight: '800' }}>{qtyLabel(l.qty, l.unit)}</Text>  {l.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text }}><Text style={{ fontWeight: '800' }}>{qtyLabel(l.qty, l.unit)}</Text>  {l.name}</Text>
+                <DiscountNote d={lineDiscount(l)} unit={l.size ? '' : l.unit} />
+              </View>
               <Text style={{ fontWeight: '700', color: colors.text }}>{money(round2(l.qty * l.price))}</Text>
             </View>
           ))}
@@ -177,33 +181,13 @@ export default function PosOrderScreen({ navigation, route }) {
         </Card>
       )}
 
-      {!editing && (
-        <>
-          <SectionTitle>Customer</SectionTitle>
-          <Segmented value={f.fulfilment} onChange={set('fulfilment')}
-            options={[{ value: 'pickup', label: 'Takeaway / counter' }, ...(shop?.delivery !== false ? [{ value: 'delivery', label: 'Delivery' }] : [])]} />
-          <Field label="Name" value={f.name} onChangeText={set('name')} placeholder="Walk-in customer" />
-          <Field label={f.fulfilment === 'delivery' ? 'Phone' : 'Phone (optional)'} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad"
-            hint="A customer with this phone sees the order in their account" />
-          {f.fulfilment === 'delivery' && <Field label="Delivery address" value={f.address} onChangeText={set('address')} multiline />}
-          <Field label="Note for the kitchen (optional)" value={f.note} onChangeText={set('note')} placeholder="e.g. extra spicy" />
-          {isOwner && <BranchField value={f.branch_id} onChange={set('branch_id')} label="Branch" />}
-        </>
+      {!!editing && (
+        <LinesScope value={edit}>
+          <CustomItemButton title="Add a custom item" style={{ alignSelf: 'flex-start', marginBottom: 12 }} />
+        </LinesScope>
       )}
 
-      <AdjustField title="Tax" k="tax" f={f} set={set} a={tax} hint="Added on the total after the discount" />
-      <AdjustField title="Service charge" k="service" f={f} set={set} a={service} hint="Added on the total after the discount" />
-      {/* Last, just above the total: the discount still comes off items + delivery before tax / service charge */}
-      <AdjustField title="Discount" k="discount" f={f} set={set} a={disc} hint="Taken off the order total (items + delivery)" />
-
-      <Card>
-        <KV label="Items" value={money(subtotal)} />
-        {(f.fulfilment === 'delivery' || fee > 0) && <KV label="Delivery" value={fee ? money(fee) : 'Free'} />}
-        {disc.amount > 0 && <KV label={`Discount${disc.pct}`} value={`-${money(disc.amount)}`} tone="bad" />}
-        {tax.amount > 0 && <KV label={`Tax${tax.pct}`} value={`+${money(tax.amount)}`} />}
-        {service.amount > 0 && <KV label={`Service charge${service.pct}`} value={`+${money(service.amount)}`} />}
-        <KV label="Total" value={money(total)} bold />
-      </Card>
+      <CheckoutFields form={form} cashRef={cashRef} />
 
       {!!editing && !tablet && <ProductPicker visible={picker} onClose={() => setPicker(false)} onAdd={add} lines={lines} />}
       {!!editing && tablet && (
@@ -256,22 +240,6 @@ function EditItems({ visible, order, onClose }) {
   );
 }
 
-// None / fixed amount / % with its value (discount, tax, service charge — all 0 by default)
-function AdjustField({ title, k, f, set, a, hint }) {
-  const type = f[`${k}_type`];
-  return (
-    <>
-      <SectionTitle>{title}</SectionTitle>
-      <Segmented value={type} onChange={set(`${k}_type`)}
-        options={[{ value: '', label: 'None' }, { value: 'fixed', label: 'Amount' }, { value: 'percent', label: '%' }]} />
-      {!!type && (
-        <Field label={type === 'percent' ? `${title} %` : `${title} amount`} value={f[`${k}_value`]} onChangeText={set(`${k}_value`)}
-          keyboardType="decimal-pad" placeholder="0" error={a.error}
-          hint={a.amount > 0 ? `${hint}: ${money(a.amount)}` : hint} testID={`${k}-value`} />
-      )}
-    </>
-  );
-}
 
 // Search the catalogue and tap to add (items with sizes: tap the size)
 function ProductPicker({ visible, onClose, onAdd, lines }) {

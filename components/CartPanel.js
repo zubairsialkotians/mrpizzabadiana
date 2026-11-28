@@ -3,8 +3,9 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, StyleSheet } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, s } from './ui';
-import { ProductImage, QtyStepper } from './shop';
-import { useCart, lineKey, lineName } from './CartContext';
+import { CustomItemButton } from './CustomItem';
+import { ProductImage, QtyStepper, DiscountNote } from './shop';
+import { useCart, lineKey, lineName, lineDiscount } from './CartContext';
 import { confirmAction } from '../services/confirm';
 import { money } from '../services/format';
 import { round2 } from '../services/qty';
@@ -19,7 +20,8 @@ export const panelWidth = (width) => (width >= 1100 ? 400 : width >= 900 ? 360 :
 export const isSplit = (width, isSeller) => !!isSeller && width >= SPLIT_MIN_WIDTH;
 
 // title / checkoutTitle / note: changing a placed order uses its own words; clearable: show "Clear"
-export function CartPanel({ width, onCheckout, title = 'Current order', checkoutTitle = 'Customer & charges', checkoutIcon = 'arrow-forward',
+// onCheckoutHere: also offer "Checkout here", which finishes the order in this panel (the shop screen)
+export function CartPanel({ width, onCheckout, onCheckoutHere, title = 'Current order', checkoutTitle = 'Customer & charges', checkoutIcon = 'arrow-forward',
   note = 'Customer, discount, tax and service charge on the next step.', clearable = true, bottomInset = true }) {
   const cart = useCart();
   const insets = useSafeAreaInsets();
@@ -70,9 +72,10 @@ export function CartPanel({ width, onCheckout, title = 'Current order', checkout
                     <Ionicons name="close" size={18} color={colors.faint} />
                   </TouchableOpacity>
                 </View>
+                <DiscountNote d={lineDiscount(l)} unit={l.size ? '' : l.unit} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ width: 128 }}>
-                    <QtyStepper small product={l} qty={l.qty} onChange={(q) => cart.setQty(l.item_id, q, undefined, l.size)} />
+                    <QtyStepper small editable product={l} qty={l.qty} onChange={(q) => cart.setQty(l.item_id, q, undefined, l.size)} />
                   </View>
                   <Text style={st.amount}>{money(round2(l.qty * l.price))}</Text>
                 </View>
@@ -83,22 +86,29 @@ export function CartPanel({ width, onCheckout, title = 'Current order', checkout
       )}
 
       <View style={st.foot}>
+        <CustomItemButton style={{ alignSelf: 'flex-start', marginBottom: 10 }} />
         <View style={st.totalRow}>
           <Text style={st.totalLabel}>Items total</Text>
           <Text style={st.total}>{money(cart.subtotal)}</Text>
         </View>
         {!!note && <Text style={[s.itemMeta, { marginBottom: 10 }]}>{note}</Text>}
-        <Button testID="panel-checkout" title={checkoutTitle} icon={checkoutIcon} onPress={onCheckout} disabled={!cart.count} />
+        {onCheckoutHere && (
+          <Button testID="panel-checkout-here" title="Checkout here" icon="card-outline" onPress={onCheckoutHere} disabled={!cart.count} style={{ marginBottom: 8 }} />
+        )}
+        <Button testID="panel-checkout" title={checkoutTitle} icon={checkoutIcon} onPress={onCheckout} disabled={!cart.count}
+          variant={onCheckoutHere ? 'outline' : 'primary'} />
       </View>
     </View>
   );
 }
 
 // Tablet: pick sizes right on the shop screen. Tap a size to add it; − / + change it, − at 1 takes it out again.
-export function SizePicker({ product: p, onClose }) {
+export function SizePicker({ product, onClose }) {
   const cart = useCart();
   const insets = useSafeAreaInsets();
-  if (!p) return null;
+  if (!product) return null;
+  // Return mode: no stock limit
+  const p = cart.returning ? { ...product, max_qty: null } : product;
   const setN = (z, n) => cart.setQty(p.id, n, p, z.name);
   const total = p.sizes.reduce((a, z) => a + cart.qtyOf(p.id, z.name), 0);
   return (
@@ -123,11 +133,11 @@ export function SizePicker({ product: p, onClose }) {
                 {n > 0 ? (
                   <View style={st.step}>
                     <TouchableOpacity style={st.stepBtn} onPress={() => setN(z, n - 1)} hitSlop={6} testID={`quick-size-${z.name}-dec`}>
-                      <Ionicons name={n === 1 ? 'trash-outline' : 'remove'} size={20} color={colors.brand} />
+                      <Ionicons name={n === 1 ? 'trash-outline' : 'remove'} size={20} color={colors.onBlack} />
                     </TouchableOpacity>
                     <Text style={st.stepText}>{n}</Text>
                     <TouchableOpacity style={[st.stepBtn, max && { opacity: 0.4 }]} disabled={max} onPress={() => setN(z, n + 1)} hitSlop={6} testID={`quick-size-${z.name}-inc`}>
-                      <Ionicons name="add" size={20} color={colors.brand} />
+                      <Ionicons name="add" size={20} color={colors.onBlack} />
                     </TouchableOpacity>
                   </View>
                 ) : (

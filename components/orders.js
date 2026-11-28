@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, KV, Badge, s } from './ui';
-import { ProductImage } from './shop';
+import { ProductImage, DiscountNote } from './shop';
+import { lineDiscount } from './CartContext';
+import { round2 } from '../services/qty';
 import { money, qtyLabel, niceDate, STATUS_LABELS, paymentLabel } from '../services/format';
 import { colors } from '../theme';
 
@@ -68,6 +70,7 @@ export function OrderItems({ order, showCost }) {
             <Text style={s.itemMeta}>
               {qtyLabel(it.qty, it.unit)} × {money(it.price)}{showCost && it.cost ? ` · cost ${money(it.cost)}` : ''}
             </Text>
+            <DiscountNote d={lineDiscount(it)} unit={it.size ? '' : it.unit} />
             {it.returned_qty > 0 && <Text style={[s.itemMeta, { color: colors.warning }]}>Returned {qtyLabel(it.returned_qty, it.unit)}</Text>}
           </View>
           <Text style={{ fontWeight: '700', color: colors.text }}>{money(it.line_total)}</Text>
@@ -77,10 +80,14 @@ export function OrderItems({ order, showCost }) {
   );
 }
 
+// What the items' own discounts took off (lines keep their normal price as list_price)
+export const itemsDiscount = (items = []) => round2(items.reduce((a, it) => a + (lineDiscount(it)?.off || 0), 0));
+
 export function OrderTotals({ order, showProfit }) {
   return (
     <Card>
       <KV label="Items" value={money(order.subtotal)} />
+      {itemsDiscount(order.items) > 0 && <KV label="Item discounts (included)" value={`-${money(itemsDiscount(order.items))}`} tone="good" />}
       <KV label={order.fulfilment === 'pickup' ? 'Pickup' : 'Delivery'} value={order.delivery_fee ? money(order.delivery_fee) : 'Free'} />
       {order.discount > 0 && (
         <KV label={`Discount${order.discount_type === 'percent' ? ` (${Number(order.discount_value)}%)` : ''}`} value={`-${money(order.discount)}`} tone="bad" />
@@ -88,6 +95,12 @@ export function OrderTotals({ order, showProfit }) {
       {order.tax > 0 && <KV label={`Tax${order.tax_type === 'percent' ? ` (${Number(order.tax_value)}%)` : ''}`} value={`+${money(order.tax)}`} />}
       {order.service > 0 && <KV label={`Service charge${order.service_type === 'percent' ? ` (${Number(order.service_value)}%)` : ''}`} value={`+${money(order.service)}`} />}
       <KV label="Total" value={money(order.total)} bold />
+      {order.cash_received > 0 && (
+        <>
+          <KV label="Cash received" value={money(order.cash_received)} />
+          <KV label="Change given" value={money(order.change)} />
+        </>
+      )}
       {order.refunded > 0 && <KV label="Refunded (returns)" value={`-${money(order.refunded)}`} tone="bad" />}
       {showProfit && order.profit != null && <KV label="Profit on items" value={money(order.profit)} tone={order.profit >= 0 ? 'good' : 'bad'} />}
       <Text style={s.itemMeta}>Payment: {paymentLabel(order)}</Text>

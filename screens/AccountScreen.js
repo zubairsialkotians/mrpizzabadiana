@@ -5,6 +5,8 @@ import { Screen, Card, KV, Button, ListItem, SectionTitle } from '../components/
 import { useAuth } from '../components/AuthContext';
 import { MenuSyncCard } from '../components/MenuSync';
 import { PrinterCard } from '../components/PrintBill';
+import { OfflineOrdersCard } from '../components/OfflineOrders';
+import { offlineStatus } from '../services/offlineOrders';
 import { confirmAction } from '../services/confirm';
 import { ROLE_LABELS } from '../services/format';
 import { colors } from '../theme';
@@ -14,8 +16,11 @@ export default function AccountScreen({ navigation }) {
   const { user, shop, isStaff, isTeam, isRider, isCashier, isSeller, logout, deleteAccount } = useAuth();
 
   const signOut = async () => {
-    if (await confirmAction('Log out?', '', 'Log out', true)) {
-      const wasStaff = isStaff || isTeam || isCashier;
+    const wasStaff = isStaff || isTeam || isCashier;
+    // Staff: orders taken offline stay on this device and are sent when this shop's staff log in here again
+    const left = wasStaff ? offlineStatus().orders.length : 0;
+    const warn = left ? `${left} order${left > 1 ? 's' : ''} taken offline ${left > 1 ? 'are' : 'is'} not sent yet: ${left > 1 ? 'they stay' : 'it stays'} on this device and ${left > 1 ? 'are' : 'is'} sent when staff log in here again.` : '';
+    if (await confirmAction('Log out?', warn, 'Log out', true)) {
       await logout();
       if (!wasStaff) navigation.reset({ index: 0, routes: [{ name: 'Home' }] }); // staff: the app swaps back to the shop by itself
     }
@@ -79,6 +84,8 @@ export default function AccountScreen({ navigation }) {
           {/* Owner / branch admin / cashier take orders: menu copy and printer for this phone / tablet */}
           {isSeller && (
             <>
+              <SectionTitle>Offline orders</SectionTitle>
+              <OfflineOrdersCard />
               <SectionTitle>Menu on this device</SectionTitle>
               <MenuSyncCard />
               <SectionTitle>Printer on this device</SectionTitle>

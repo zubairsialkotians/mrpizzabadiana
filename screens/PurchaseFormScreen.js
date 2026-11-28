@@ -3,6 +3,8 @@ import { View, Text, Switch } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Screen, Card, KV, Field, Button, Footer, SectionTitle, SelectField, BranchField, Chip, ChipRow, s } from '../components/ui';
 import { useLoad } from '../components/useData';
+import { useIsFocused } from '@react-navigation/native';
+import { useBarcodeScanner } from '../components/scan';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { money, qtyLabel, perUnit } from '../services/format';
@@ -41,6 +43,27 @@ export default function PurchaseFormScreen({ navigation, route }) {
     setItemId(newItemId);
     items.reload();
   }, [newItemId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /*
+    Barcode / QR scan: chooses the item with that SKU / barcode. None has it: offer a new item with the code filled in.
+  */
+  const focused = useIsFocused();
+  useBarcodeScanner(async (code) => {
+    try {
+      const r = await api.adminItems({ search: code, per_page: 30, branch_id: branchId });
+      const found = (r.items || []).find((x) => x.sku && String(x.sku).trim().toLowerCase() === code.trim().toLowerCase());
+      if (found) {
+        setCat(found.category_id || 0);
+        setItemId(found.id);
+        Toast.show({ type: 'success', text1: `${found.name} chosen`, text2: code, visibilityTime: 1500 });
+      } else {
+        Toast.show({ type: 'info', text1: 'No item with this barcode', text2: 'Tap here to add it as a new item', visibilityTime: 7000,
+          onPress: () => { Toast.hide(); navigation.navigate('ItemForm', { forPurchase: true, sku: code, category_id: cat || undefined }); } });
+      }
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Could not look up the barcode', text2: e.message });
+    }
+  }, focused);
 
   const item = useMemo(() => (items.data || []).find((x) => x.id === itemId) || null, [items.data, itemId]);
   const sized = !!item?.sizes?.length;

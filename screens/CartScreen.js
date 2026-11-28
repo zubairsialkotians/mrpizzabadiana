@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, Card, KV, Footer, Button, Empty, s } from '../components/ui';
-import { ProductImage, QtyStepper } from '../components/shop';
-import { useCart, lineKey, lineName } from '../components/CartContext';
+import { ProductImage, QtyStepper, DiscountNote } from '../components/shop';
+import { useCart, lineKey, lineName, catalogueIds, lineDiscount } from '../components/CartContext';
+import { CustomItemButton } from '../components/CustomItem';
 import { useAuth } from '../components/AuthContext';
 import { api } from '../services/api';
 import { money, perUnit } from '../services/format';
@@ -17,9 +18,10 @@ export default function CartScreen({ navigation }) {
 
   // Bring prices and stock up to date
   useEffect(() => {
-    if (!cart.lines.length) return;
+    const ids = catalogueIds(cart.lines);
+    if (!ids) return;
     setChecking(true);
-    api.products({ ids: cart.lines.map((l) => l.item_id).join(','), per_page: 60 })
+    api.products({ ids, per_page: 60 })
       .then((r) => cart.sync(r.products))
       .catch(() => {})
       .finally(() => setChecking(false));
@@ -30,6 +32,7 @@ export default function CartScreen({ navigation }) {
       <Screen title="Cart">
         <Empty icon="cart-outline" text={isSeller ? 'No items in this order yet' : 'Your cart is empty'} />
         <Button title={isSeller ? 'Add items' : 'Start shopping'} onPress={() => navigation.navigate('Home')} />
+        {isSeller && <CustomItemButton title="Add a custom item" small={false} style={{ marginTop: 10 }} />}
       </Screen>
     );
   }
@@ -62,7 +65,7 @@ export default function CartScreen({ navigation }) {
         const over = overItem(l);
         return (
           <Card key={lineKey(l.item_id, l.size)} style={{ flexDirection: 'row', gap: 12, padding: 10 }}>
-            <TouchableOpacity onPress={() => navigation.navigate('Product', { id: l.item_id })}>
+            <TouchableOpacity onPress={() => !l.custom && navigation.navigate('Product', { id: l.item_id })} disabled={!!l.custom}>
               <ProductImage uri={l.image} style={{ width: 70, height: 70, borderRadius: 10 }} iconSize={24} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
@@ -71,8 +74,9 @@ export default function CartScreen({ navigation }) {
                 <TouchableOpacity onPress={() => cart.remove(l.item_id, l.size)} hitSlop={8}><Ionicons name="close" size={18} color={colors.faint} /></TouchableOpacity>
               </View>
               <Text style={s.itemMeta}>{l.size ? `${money(l.price)} each` : perUnit(l.price, l.unit)}</Text>
+              <DiscountNote d={lineDiscount(l)} unit={l.size ? '' : l.unit} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ width: 150 }}><QtyStepper small product={l} qty={l.qty} onChange={(q) => cart.setQty(l.item_id, q, undefined, l.size)} testID={`line-${l.item_id}${l.size ? `-${l.size}` : ''}`} /></View>
+                <View style={{ width: 150 }}><QtyStepper small editable={!!isSeller} product={l} qty={l.qty} onChange={(q) => cart.setQty(l.item_id, q, undefined, l.size)} testID={`line-${l.item_id}${l.size ? `-${l.size}` : ''}`} /></View>
                 <Text style={{ flex: 1, textAlign: 'right', fontWeight: '800', color: colors.text, marginTop: 8 }}>{money(round2(l.qty * l.price))}</Text>
               </View>
               {over && <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }}>Only {l.max_qty} {l.unit} available{l.size ? ' (all sizes together)' : ''}</Text>}
@@ -81,6 +85,7 @@ export default function CartScreen({ navigation }) {
         );
       })}
 
+      {isSeller && <CustomItemButton title="Add a custom item" style={{ alignSelf: 'flex-start', marginBottom: 12 }} />}
       {isSeller ? (
         <Card>
           <KV label="Items" value={money(cart.subtotal)} bold />
